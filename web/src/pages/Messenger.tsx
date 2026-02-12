@@ -77,8 +77,8 @@ export default function Messenger() {
       <div className="h-full min-h-[100dvh] w-full bg-surface dark:bg-dark-bg safe-top safe-x safe-bottom overflow-x-hidden">
         {notification && (
           <div
-            className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-compass shadow-compass-dialog animate-fade max-w-[90vw]"
-            style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+            className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-xl shadow-lg animate-fade max-w-[90vw]"
+            style={{ top: 'max(3rem, calc(env(safe-area-inset-top) + 1rem))' }}
           >
             {notification}
           </div>
@@ -108,19 +108,21 @@ export default function Messenger() {
 
   return (
     <div className="h-full min-h-[100dvh] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-top safe-x safe-bottom overflow-x-hidden">
-      {/* ── Toast: добавление/исключение участника ── */}
+      {/* ── Toast: уведомление (участник добавлен/удалён и т.д.) — ниже статус-бара, не перекрывает контент ── */}
       {notification && (
-        <div className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-compass shadow-compass-dialog animate-fade max-w-[90vw]"
-          style={{ top: 'max(1rem, env(safe-area-inset-top))' }}>
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-xl shadow-lg animate-fade max-w-[90vw]"
+          style={{ top: 'max(3rem, calc(env(safe-area-inset-top) + 1rem))' }}
+        >
           {notification}
         </div>
       )}
       {(appStatus.maintenance || appStatus.degradation || appStatus.read_only) && (
         <div
-          className={`fixed left-1/2 -translate-x-1/2 z-[95] px-4 py-2 text-[13px] font-medium rounded-compass shadow-compass-dialog max-w-[92vw] ${
+          className={`fixed left-1/2 -translate-x-1/2 z-[95] px-4 py-2 text-[13px] font-medium rounded-xl shadow-compass-dialog max-w-[92vw] ${
             appStatus.read_only || appStatus.maintenance ? 'bg-amber-600 text-white' : 'bg-blue-600 text-white'
           }`}
-          style={{ top: notification ? 'calc(max(1rem, env(safe-area-inset-top)) + 3.5rem)' : 'max(1rem, env(safe-area-inset-top))' }}
+          style={{ top: notification ? 'max(6rem, calc(env(safe-area-inset-top) + 4rem))' : 'max(3rem, calc(env(safe-area-inset-top) + 1rem))' }}
         >
           {appStatus.message || (appStatus.read_only ? 'Идёт обслуживание. Отправка сообщений временно отключена.' : 'Возможны задержки в работе сервиса.')}
         </div>

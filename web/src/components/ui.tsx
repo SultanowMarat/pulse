@@ -10,15 +10,15 @@ function hashColor(name: string): string {
   return palette[Math.abs(h) % palette.length];
 }
 
-/** В десктопе (file://) относительные URL не работают — делаем абсолютный через getApiBase(). */
+/** Всегда отдаём абсолютный URL аватара: в десктопе и PWA относительные пути не работают. */
 function resolveAvatarUrl(url: string | undefined): string | undefined {
   if (!url || typeof url !== 'string') return url;
   const t = url.trim();
-  if (t.startsWith('/')) {
-    const base = getApiBase();
-    return base ? base.replace(/\/$/, '') + t : url;
-  }
-  return url;
+  if (t.startsWith('http://') || t.startsWith('https://')) return t;
+  const base = getApiBase();
+  if (!base) return url;
+  const norm = base.replace(/\/$/, '');
+  return t.startsWith('/') ? norm + t : norm + '/' + t;
 }
 
 interface AvatarProps {
@@ -30,16 +30,25 @@ interface AvatarProps {
 }
 
 export const Avatar = React.memo(function Avatar({ name, url, size = 40, online, className = '' }: AvatarProps) {
+  const [loadFailed, setLoadFailed] = React.useState(false);
+  const imgSrc = resolveAvatarUrl(url);
+  React.useEffect(() => setLoadFailed(false), [url]);
+  const showImg = imgSrc && !loadFailed;
   const initials = name.slice(0, 2).toUpperCase();
   const bg = hashColor(name);
   const fontSize = size * 0.36;
   const dotSize = Math.max(size * 0.24, 8);
-  const imgSrc = resolveAvatarUrl(url);
 
   return (
     <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }}>
-      {imgSrc ? (
-        <img src={imgSrc} alt={name} className="w-full h-full rounded-full object-cover" />
+      {showImg ? (
+        <img
+          src={imgSrc}
+          alt={name}
+          className="w-full h-full rounded-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setLoadFailed(true)}
+        />
       ) : (
         <div
           className="w-full h-full rounded-full flex items-center justify-center text-white font-bold select-none"

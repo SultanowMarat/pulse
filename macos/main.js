@@ -9,6 +9,8 @@ const BUNDLED_APP_PATH = path.join(__dirname, 'app', 'index.html');
 const OFFLINE_PATH = path.join(__dirname, 'gate', 'offline.html');
 
 let isQuitting = false;
+/** Главное окно приложения (для показа при фокусе после клика по пушу). */
+let mainWindow = null;
 
 /** Сбрасывает кеш сессии, чтобы приложение подтянуло свежий интерфейс с сервера. */
 function clearCache() {
@@ -30,7 +32,7 @@ async function loadWindow(win) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 960,
     height: 700,
     minWidth: 400,
@@ -43,40 +45,66 @@ function createWindow() {
     title: 'BuhChat',
   });
 
-  loadWindow(win);
+  loadWindow(mainWindow);
+
+  // При фокусе на главное окно (например после клика по пушу) — показываем его, если было скрыто
+  mainWindow.on('focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
+  });
 
   // Cmd+R / Cmd+Shift+R / Ctrl+R: сброс кеша и загрузка с сервера, чтобы интерфейс обновился
-  win.webContents.on('before-input-event', (event, input) => {
+  mainWindow.webContents.on('before-input-event', (event, input) => {
     const isReload = (input.control || input.meta) && input.key && input.key.toLowerCase() === 'r';
     if (!isReload) return;
     event.preventDefault();
     clearCache().then(() => {
       // Всегда грузим с сервера при Reload, иначе при file:// просто перезагрузится старый bundle
-      win.loadURL(APP_URL).catch(() => {
-        if (fs.existsSync(BUNDLED_APP_PATH)) win.loadFile(BUNDLED_APP_PATH);
-        else win.loadFile(OFFLINE_PATH);
+      mainWindow.loadURL(APP_URL).catch(() => {
+        if (fs.existsSync(BUNDLED_APP_PATH)) mainWindow.loadFile(BUNDLED_APP_PATH);
+        else mainWindow.loadFile(OFFLINE_PATH);
       });
     });
   });
 
   const onFail = () => {
-    win.webContents.removeListener('did-fail-load', onFail);
-    win.loadFile(OFFLINE_PATH);
+    mainWindow.webContents.removeListener('did-fail-load', onFail);
+    mainWindow.loadFile(OFFLINE_PATH);
   };
-  win.webContents.on('did-fail-load', (event, code) => {
+  mainWindow.webContents.on('did-fail-load', (event, code) => {
     if (code !== -3) onFail();
   });
 
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   // Красная кнопка (крестик) — скрыть окно; Cmd+Q или «Завершить» — полный выход.
   if (process.platform === 'darwin') {
-    win.on('close', (e) => {
-      if (isQuitting || win.isFullScreen()) return;
+    mainWindow.on('close', (e) => {
+      if (isQuitting || mainWindow.isFullScreen()) return;
       e.preventDefault();
-      win.hide();
+      mainWindow.hide();
     });
   }
+}
+
+/** Создаёт скрытое окно, которое держит контекст для Service Worker, чтобы пуш приходил при свёрнутом/закрытом главном окне. */
+function createPushWindow() {
+  const pushWin = new BrowserWindow({
+    width: 400,
+    height: 300,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  loadWindow(pushWin);
+  pushWin.webContents.on('did-fail-load', (event, code) => {
+    if (code !== -3) pushWin.loadFile(OFFLINE_PATH);
+  });
+  pushWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Не закрывать при закрытии главного окна — это окно держит SW для push
+  return pushWin;
 }
 
 app.whenReady().then(() => {
@@ -93,6 +121,8 @@ app.whenReady().then(() => {
     ]));
   }
   createWindow();
+  // Скрытое окно держит контекст Service Worker — пуш приходит даже когда главное окно закрыто (скрыто)
+  createPushWindow();
 });
 
 app.on('before-quit', () => {
@@ -104,15 +134,18 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    return;
+  }
   const wins = BrowserWindow.getAllWindows();
   if (wins.length === 0) createWindow();
   else wins[0].show();
 });
 
 ipcMain.handle('reload-app', async () => {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (!win) return;
-  await loadWindow(win);
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  await loadWindow(mainWindow);
 });
 
 ipcMain.handle('set-badge-count', (_, count) => {
@@ -126,10 +159,9 @@ ipcMain.handle('show-notification', (_, opts) => {
   const body = (opts && typeof opts.body === 'string') ? opts.body : '';
   const n = new Notification({ title, body, silent: false });
   n.on('click', () => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) {
-      win.show();
-      win.focus();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
   n.show();

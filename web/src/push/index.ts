@@ -6,12 +6,9 @@ import { getPushConfig, pushSubscribe, type PushSubscriptionJson } from '../api'
 
 const SW_PATH = '/sw.js';
 
-/** Запросить разрешение на уведомления для PWA (in-app уведомления при новых сообщениях). Вызывать при загрузке. */
+/** Запросить разрешение на уведомления. В Electron — чтобы показывать native уведомления при новых сообщениях. В PWA — то же. */
 export async function requestNotificationPermissionForPWA(): Promise<void> {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
-  if ((window as unknown as { electronAPI?: unknown }).electronAPI) return;
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-  if (!isStandalone) return;
   if (Notification.permission !== 'default') return;
   try {
     await Notification.requestPermission();

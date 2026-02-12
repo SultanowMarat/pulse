@@ -986,6 +986,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get().updateElectronBadge();
 
         const { activeChatId } = get();
+        // В Electron обновление состояния может не перерисовать UI — подтягиваем сообщения с сервера для активного чата
+        if (activeChatId === msg.chat_id) {
+          setTimeout(() => get().fetchMessages(activeChatId), 150);
+        }
         const chat = get().chats.find((c) => c.chat.id === msg.chat_id);
         const chatTitle = chat
           ? (chat.chat.chat_type === 'group' || chat.chat.chat_type === 'notes'
