@@ -1,0 +1,16 @@
+.deploy/
+.env
+.DS_Store
+/api
+/config/vapid.json
+/data/
+/services/*/logs/
+*.log
+web/node_modules/
+web/dist/
+macos/node_modules/
+macos/dist/
+macos/app/
+macos/.vite/
+ssh/
+*.md

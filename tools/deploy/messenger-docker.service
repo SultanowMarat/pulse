@@ -1,0 +1,23 @@
+# Юнит для автозапуска контейнеров Messenger при загрузке сервера.
+# Устанавливается на сервер в /etc/systemd/system/.
+# После включения сервера: запускается Docker, затем этот юнит выполняет docker compose up -d в /opt/messenger.
+
+[Unit]
+Description=Messenger Docker Compose stack
+Documentation=https://github.com/SultanowMarat/messenger
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/messenger
+ExecStart=docker compose up -d
+ExecStop=docker compose down
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
