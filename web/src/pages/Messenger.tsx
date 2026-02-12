@@ -355,9 +355,6 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
-        <p className="text-[11px] text-txt-placeholder dark:text-[#8b98a5]">
-          Ссылки на установку задаются администратором в разделе «Администрирование → Ссылки».
-        </p>
       </div>
     );
   }, [installLinks?.install_android_url, installLinks?.install_ios_url, installLinks?.install_macos_url, installLinks?.install_windows_url, openInstall]);
