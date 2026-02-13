@@ -145,6 +145,7 @@ services:
     environment:
       SERVER_ADDR: ":8080"
       DATABASE_URL: "postgres://messenger:messenger_secret@postgres:5432/messenger?sslmode=disable"
+      REDIS_URL: "redis://redis:6379"
       AUTH_SERVICE_URL: "http://auth:8081"
       PUSH_SERVICE_URL: "http://push:8082"
       PUSH_VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"

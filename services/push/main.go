@@ -4,10 +4,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/messenger/internal/broker"
 	"github.com/messenger/internal/logger"
 	"github.com/messenger/internal/push"
 )
@@ -24,6 +27,11 @@ const (
 	redisKeyPrefix   = "push:subs:"
 	maxSubsPerUser   = 10
 	subscriptionTTL  = 30 * 24 * time.Hour
+	processedKeyPref = "push:processed:event:"
+	processedTTL     = 7 * 24 * time.Hour
+	brokerReadBatch  = 50
+	brokerClaimIdle  = 30 * time.Second
+	brokerClaimEvery = 10 * time.Second
 )
 
 type Config struct {
@@ -31,6 +39,7 @@ type Config struct {
 	RedisURL        string
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
+	ConsumerName    string
 }
 
 func loadConfig() *Config {
@@ -39,6 +48,15 @@ func loadConfig() *Config {
 		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
 		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
+		ConsumerName:    getEnv("PUSH_CONSUMER_NAME", ""),
+	}
+	if c.ConsumerName == "" {
+		host, err := os.Hostname()
+		if err == nil && host != "" {
+			c.ConsumerName = "push-" + host
+		} else {
+			c.ConsumerName = fmt.Sprintf("push-%d", os.Getpid())
+		}
 	}
 	return c
 }
@@ -63,12 +81,7 @@ type SubscribeRequest struct {
 	Subscription PushSubscription `json:"subscription"`
 }
 
-type NotifyRequest struct {
-	UserID string            `json:"user_id"`
-	Title  string            `json:"title"`
-	Body   string            `json:"body"`
-	Data   map[string]string `json:"data,omitempty"`
-}
+type NotifyRequest = broker.PushNotifyPayload
 
 type Server struct {
 	cfg   *Config
@@ -129,6 +142,7 @@ func main() {
 		}
 	}
 	s := &Server{cfg: cfg, redis: rdb, vapid: vapidOpts}
+	runCtx, runCancel := context.WithCancel(context.Background())
 
 	r := chi.NewRouter()
 	r.Use(chimw.RealIP)
@@ -150,6 +164,13 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	var bgWG sync.WaitGroup
+	bgWG.Add(1)
+	go func() {
+		defer bgWG.Done()
+		s.runBrokerConsumer(runCtx)
+	}()
+
 	go func() {
 		logger.Infof("push server listening on %s", cfg.ServerAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -162,11 +183,13 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("shutdown signal received")
+	runCancel()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Errorf("shutdown: %v", err)
 	}
+	bgWG.Wait()
 	logger.Info("push server stopped")
 }
 
@@ -190,18 +213,7 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user_id and subscription (endpoint, keys.p256dh, keys.auth) required", http.StatusBadRequest)
 		return
 	}
-	raw, err := json.Marshal(req.Subscription)
-	if err != nil {
-		http.Error(w, "subscription encode", http.StatusInternalServerError)
-		return
-	}
-	key := redisKeyPrefix + req.UserID
-	ctx := r.Context()
-	pipe := s.redis.Pipeline()
-	pipe.RPush(ctx, key, string(raw))
-	pipe.LTrim(ctx, key, -maxSubsPerUser, -1)
-	pipe.Expire(ctx, key, subscriptionTTL)
-	if _, err := pipe.Exec(ctx); err != nil {
+	if err := s.saveSubscription(r.Context(), req.UserID, req.Subscription); err != nil {
 		logger.Errorf("subscribe redis: %v", err)
 		http.Error(w, "failed to save subscription", http.StatusInternalServerError)
 		return
@@ -223,28 +235,10 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user_id and endpoint required", http.StatusBadRequest)
 		return
 	}
-	key := redisKeyPrefix + req.UserID
-	ctx := r.Context()
-	list, err := s.redis.LRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		http.Error(w, "failed to get subscriptions", http.StatusInternalServerError)
+	if err := s.deleteSubscription(r.Context(), req.UserID, req.Endpoint); err != nil {
+		logger.Errorf("unsubscribe redis: %v", err)
+		http.Error(w, "failed to unsubscribe", http.StatusInternalServerError)
 		return
-	}
-	var kept []string
-	for _, item := range list {
-		var sub PushSubscription
-		if json.Unmarshal([]byte(item), &sub) == nil && sub.Endpoint != req.Endpoint {
-			kept = append(kept, item)
-		}
-	}
-	if len(kept) == 0 {
-		s.redis.Del(ctx, key)
-	} else {
-		s.redis.Del(ctx, key)
-		for _, v := range kept {
-			s.redis.RPush(ctx, key, v)
-		}
-		s.redis.Expire(ctx, key, subscriptionTTL)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -260,14 +254,25 @@ func (s *Server) handleNotify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user_id required", http.StatusBadRequest)
 		return
 	}
-	key := redisKeyPrefix + req.UserID
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
+	if err := s.sendNotify(ctx, req); err != nil {
+		logger.Errorf("notify: %v", err)
+		http.Error(w, "failed to notify", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) sendNotify(ctx context.Context, req NotifyRequest) error {
+	req.UserID = strings.TrimSpace(req.UserID)
+	if req.UserID == "" {
+		return fmt.Errorf("notify user_id required")
+	}
+	key := redisKeyPrefix + req.UserID
 	list, err := s.redis.LRange(ctx, key, 0, -1).Result()
 	if err != nil {
-		logger.Errorf("notify redis: %v", err)
-		http.Error(w, "failed to get subscriptions", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("notify redis lrange: %w", err)
 	}
 	payload := map[string]interface{}{"title": req.Title, "body": req.Body, "data": req.Data}
 	payloadBytes, _ := json.Marshal(payload)
@@ -279,7 +284,7 @@ func (s *Server) handleNotify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if s.vapid == nil {
-		return
+		return nil
 	}
 	for i := range subs {
 		sub := &subs[i]
@@ -297,14 +302,284 @@ func (s *Server) handleNotify(w http.ResponseWriter, r *http.Request) {
 			s.removeSubscription(ctx, req.UserID, sub.Endpoint)
 		}
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) runBrokerConsumer(ctx context.Context) {
+	if err := s.ensureBrokerGroup(ctx); err != nil {
+		logger.Errorf("broker group init: %v", err)
+		return
+	}
+	logger.Infof(
+		"broker consumer started stream=%s group=%s consumer=%s",
+		broker.PushStreamName,
+		broker.PushConsumerGroup,
+		s.cfg.ConsumerName,
+	)
+
+	nextClaimAt := time.Now()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Now().After(nextClaimAt) {
+			s.claimPending(ctx)
+			nextClaimAt = time.Now().Add(brokerClaimEvery)
+		}
+
+		streams, err := s.redis.XReadGroup(ctx, &redis.XReadGroupArgs{
+			Group:    broker.PushConsumerGroup,
+			Consumer: s.cfg.ConsumerName,
+			Streams:  []string{broker.PushStreamName, ">"},
+			Count:    brokerReadBatch,
+			Block:    5 * time.Second,
+		}).Result()
+		if err == redis.Nil {
+			continue
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			if strings.Contains(err.Error(), "NOGROUP") {
+				if initErr := s.ensureBrokerGroup(ctx); initErr != nil {
+					logger.Errorf("broker group re-init: %v", initErr)
+				}
+				continue
+			}
+			logger.Errorf("broker read group: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		s.processStreamMessages(ctx, streams)
+	}
+}
+
+func (s *Server) ensureBrokerGroup(ctx context.Context) error {
+	err := s.redis.XGroupCreateMkStream(ctx, broker.PushStreamName, broker.PushConsumerGroup, "0").Err()
+	if err == nil || strings.Contains(err.Error(), "BUSYGROUP") {
+		return nil
+	}
+	return err
+}
+
+func (s *Server) claimPending(ctx context.Context) {
+	start := "0-0"
+	for {
+		messages, nextStart, err := s.redis.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+			Stream:   broker.PushStreamName,
+			Group:    broker.PushConsumerGroup,
+			Consumer: s.cfg.ConsumerName,
+			MinIdle:  brokerClaimIdle,
+			Start:    start,
+			Count:    brokerReadBatch,
+		}).Result()
+		if err == redis.Nil {
+			return
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), "NOGROUP") {
+				if initErr := s.ensureBrokerGroup(ctx); initErr != nil {
+					logger.Errorf("broker claim group init: %v", initErr)
+				}
+			} else {
+				logger.Errorf("broker autoclaim: %v", err)
+			}
+			return
+		}
+		if len(messages) == 0 {
+			return
+		}
+		s.processClaimedMessages(ctx, messages)
+		if nextStart == "0-0" {
+			return
+		}
+		start = nextStart
+	}
+}
+
+func (s *Server) processStreamMessages(ctx context.Context, streams []redis.XStream) {
+	for _, stream := range streams {
+		for _, msg := range stream.Messages {
+			s.processOneMessage(ctx, msg)
+		}
+	}
+}
+
+func (s *Server) processClaimedMessages(ctx context.Context, messages []redis.XMessage) {
+	for _, msg := range messages {
+		s.processOneMessage(ctx, msg)
+	}
+}
+
+func (s *Server) processOneMessage(ctx context.Context, msg redis.XMessage) {
+	ack, err := s.consumeMessage(ctx, msg)
+	if err != nil {
+		logger.Errorf("broker consume id=%s: %v", msg.ID, err)
+	}
+	if !ack {
+		return
+	}
+	if err := s.redis.XAck(ctx, broker.PushStreamName, broker.PushConsumerGroup, msg.ID).Err(); err != nil {
+		logger.Errorf("broker ack id=%s: %v", msg.ID, err)
+	}
+}
+
+func (s *Server) consumeMessage(ctx context.Context, msg redis.XMessage) (bool, error) {
+	topic := asString(msg.Values["topic"])
+	if topic == "" {
+		return true, nil
+	}
+	eventID := asString(msg.Values["event_id"])
+	if eventID != "" {
+		done, err := s.redis.Exists(ctx, processedKeyPref+eventID).Result()
+		if err != nil {
+			return false, fmt.Errorf("broker check processed id=%s: %w", eventID, err)
+		}
+		if done > 0 {
+			return true, nil
+		}
+	}
+	payloadRaw := asString(msg.Values["payload"])
+	switch topic {
+	case broker.TopicPushNotify:
+		if payloadRaw == "" {
+			return true, nil
+		}
+		var req NotifyRequest
+		if err := json.Unmarshal([]byte(payloadRaw), &req); err != nil {
+			logger.Errorf("broker invalid payload id=%s topic=%s: %v", msg.ID, topic, err)
+			return true, nil
+		}
+		req.UserID = strings.TrimSpace(req.UserID)
+		if req.UserID == "" {
+			logger.Errorf("broker invalid notify payload id=%s: empty user_id", msg.ID)
+			return true, nil
+		}
+		notifyCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		err := s.sendNotify(notifyCtx, req)
+		cancel()
+		if err != nil {
+			return false, err
+		}
+	case broker.TopicPushSubscribe:
+		if payloadRaw == "" {
+			return true, nil
+		}
+		var req broker.PushSubscribePayload
+		if err := json.Unmarshal([]byte(payloadRaw), &req); err != nil {
+			logger.Errorf("broker invalid payload id=%s topic=%s: %v", msg.ID, topic, err)
+			return true, nil
+		}
+		req.UserID = strings.TrimSpace(req.UserID)
+		req.Subscription.Endpoint = strings.TrimSpace(req.Subscription.Endpoint)
+		if req.UserID == "" || req.Subscription.Endpoint == "" || req.Subscription.Keys.P256dh == "" || req.Subscription.Keys.Auth == "" {
+			logger.Errorf("broker invalid subscribe payload id=%s", msg.ID)
+			return true, nil
+		}
+		sub := PushSubscription{
+			Endpoint: req.Subscription.Endpoint,
+			Keys:     req.Subscription.Keys,
+		}
+		if err := s.saveSubscription(ctx, req.UserID, sub); err != nil {
+			return false, err
+		}
+	case broker.TopicPushUnsubscribe:
+		if payloadRaw == "" {
+			return true, nil
+		}
+		var req broker.PushUnsubscribePayload
+		if err := json.Unmarshal([]byte(payloadRaw), &req); err != nil {
+			logger.Errorf("broker invalid payload id=%s topic=%s: %v", msg.ID, topic, err)
+			return true, nil
+		}
+		req.UserID = strings.TrimSpace(req.UserID)
+		req.Endpoint = strings.TrimSpace(req.Endpoint)
+		if req.UserID == "" || req.Endpoint == "" {
+			logger.Errorf("broker invalid unsubscribe payload id=%s", msg.ID)
+			return true, nil
+		}
+		if err := s.deleteSubscription(ctx, req.UserID, req.Endpoint); err != nil {
+			return false, err
+		}
+	default:
+		return true, nil
+	}
+
+	s.markEventProcessed(ctx, eventID)
+	return true, nil
+}
+
+func asString(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	default:
+		return fmt.Sprint(val)
+	}
 }
 
 func (s *Server) removeSubscription(ctx context.Context, userID, endpoint string) {
+	if err := s.deleteSubscription(ctx, userID, endpoint); err != nil {
+		logger.Errorf("remove subscription user=%s: %v", userID, err)
+	}
+}
+
+func (s *Server) saveSubscription(ctx context.Context, userID string, sub PushSubscription) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || sub.Endpoint == "" || sub.Keys.P256dh == "" || sub.Keys.Auth == "" {
+		return fmt.Errorf("invalid subscription payload")
+	}
+	raw, err := json.Marshal(sub)
+	if err != nil {
+		return fmt.Errorf("subscription encode: %w", err)
+	}
+
 	key := redisKeyPrefix + userID
 	list, err := s.redis.LRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		return
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("subscription load: %w", err)
+	}
+
+	var kept []string
+	for _, item := range list {
+		var existing PushSubscription
+		if json.Unmarshal([]byte(item), &existing) == nil && existing.Endpoint != "" && existing.Endpoint != sub.Endpoint {
+			kept = append(kept, item)
+		}
+	}
+	kept = append(kept, string(raw))
+	if len(kept) > maxSubsPerUser {
+		kept = kept[len(kept)-maxSubsPerUser:]
+	}
+
+	pipe := s.redis.TxPipeline()
+	pipe.Del(ctx, key)
+	for _, item := range kept {
+		pipe.RPush(ctx, key, item)
+	}
+	pipe.Expire(ctx, key, subscriptionTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("subscription save: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) deleteSubscription(ctx context.Context, userID, endpoint string) error {
+	userID = strings.TrimSpace(userID)
+	endpoint = strings.TrimSpace(endpoint)
+	if userID == "" || endpoint == "" {
+		return fmt.Errorf("invalid unsubscribe payload")
+	}
+
+	key := redisKeyPrefix + userID
+	list, err := s.redis.LRange(ctx, key, 0, -1).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("subscription load: %w", err)
 	}
 	var kept []string
 	for _, item := range list {
@@ -313,12 +588,27 @@ func (s *Server) removeSubscription(ctx context.Context, userID, endpoint string
 			kept = append(kept, item)
 		}
 	}
-	s.redis.Del(ctx, key)
-	for _, v := range kept {
-		s.redis.RPush(ctx, key, v)
+
+	pipe := s.redis.TxPipeline()
+	pipe.Del(ctx, key)
+	for _, item := range kept {
+		pipe.RPush(ctx, key, item)
 	}
 	if len(kept) > 0 {
-		s.redis.Expire(ctx, key, subscriptionTTL)
+		pipe.Expire(ctx, key, subscriptionTTL)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("subscription delete: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) markEventProcessed(ctx context.Context, eventID string) {
+	if eventID == "" {
+		return
+	}
+	if err := s.redis.Set(ctx, processedKeyPref+eventID, "1", processedTTL).Err(); err != nil {
+		logger.Errorf("broker set processed id=%s: %v", eventID, err)
 	}
 }
 

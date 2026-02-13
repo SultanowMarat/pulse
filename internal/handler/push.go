@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -10,11 +11,16 @@ import (
 
 // PushHandler обрабатывает подписку на пуш-уведомления (сессия обязательна).
 type PushHandler struct {
-	client *push.Client
+	client PushSubscriptionClient
+}
+
+type PushSubscriptionClient interface {
+	Subscribe(ctx context.Context, userID string, sub push.PushSubscription) error
+	Unsubscribe(ctx context.Context, userID, endpoint string) error
 }
 
 // NewPushHandler создаёт обработчик push.
-func NewPushHandler(client *push.Client) *PushHandler {
+func NewPushHandler(client PushSubscriptionClient) *PushHandler {
 	return &PushHandler{client: client}
 }
 
@@ -25,6 +31,10 @@ type SubscribeRequest struct {
 
 // Subscribe сохраняет подписку на push-сервисе для текущего пользователя.
 func (h *PushHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.client == nil {
+		writeError(w, http.StatusServiceUnavailable, "push service disabled")
+		return
+	}
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -53,6 +63,10 @@ type UnsubscribeRequest struct {
 
 // Unsubscribe удаляет подписку.
 func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.client == nil {
+		writeError(w, http.StatusServiceUnavailable, "push service disabled")
+		return
+	}
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		writeError(w, http.StatusUnauthorized, "unauthorized")

@@ -213,7 +213,7 @@ func (r *UserRepository) ListPage(ctx context.Context, q string, limit, offset i
 
 	// Total count
 	var total int
-	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users "+where, args...).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users u "+where, args...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("userRepo.ListPage count: %w", err)
 	}
 

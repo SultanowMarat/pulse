@@ -22,13 +22,15 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/messenger/internal/broker"
 	"github.com/messenger/internal/config"
 	"github.com/messenger/internal/handler"
 	"github.com/messenger/internal/logger"
 	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/runtime"
+	"github.com/messenger/internal/outbox"
 	"github.com/messenger/internal/push"
 	"github.com/messenger/internal/repository"
+	"github.com/messenger/internal/runtime"
 	"github.com/messenger/internal/startup"
 	"github.com/messenger/internal/ws"
 )
@@ -90,10 +92,49 @@ func main() {
 	msgRepo := repository.NewMessageRepository(pool)
 	reactRepo := repository.NewReactionRepository(pool)
 	pinnedRepo := repository.NewPinnedRepository(pool)
+	outboxRepo := repository.NewOutboxRepository(pool)
 	fileH := handler.NewFileHandler(cfg)
-	pushClient := push.NewClient(cfg.PushServiceURL)
+	pushBrokerClient := push.NewBrokerClient(outboxRepo)
+	pushNotifier := ws.PushNotifier(nil)
+	pushSubClient := handler.PushSubscriptionClient(nil)
+	var relayCancel context.CancelFunc
+	var relayWg sync.WaitGroup
+	var streamPublisher *broker.StreamPublisher
+
+	if cfg.PushServiceURL == "" {
+		logger.Info("push notifier disabled: PUSH_SERVICE_URL is empty")
+	} else {
+		// Keep push alive even when broker is unavailable.
+		pushHTTPClient := push.NewClient(cfg.PushServiceURL)
+		pushNotifier = pushHTTPClient
+		pushSubClient = pushHTTPClient
+
+		redisCtx, redisCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		streamPublisher, err = broker.NewStreamPublisher(redisCtx, cfg.Redis.URL, broker.PushStreamName)
+		redisCancel()
+		if err != nil {
+			logger.Errorf("outbox relay disabled (redis publisher init failed), using direct HTTP push client: %v", err)
+		} else {
+			pushNotifier = pushBrokerClient
+			pushSubClient = pushBrokerClient
+			host, hostErr := os.Hostname()
+			if hostErr != nil || host == "" {
+				host = "api"
+			}
+			relayCtx, cancel := context.WithCancel(context.Background())
+			relayCancel = cancel
+			relay := outbox.NewRelay(outboxRepo, streamPublisher, fmt.Sprintf("%s-%d", host, os.Getpid()))
+			relayWg.Add(1)
+			go func() {
+				defer relayWg.Done()
+				relay.Run(relayCtx)
+			}()
+			logger.Info("outbox relay started, push routed through broker")
+		}
+	}
+
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	hub := ws.NewHub(chatRepo, msgRepo, userRepo, reactRepo, pinnedRepo, cfg.MaxWSConnections, pushClient, fileH)
+	hub := ws.NewHub(chatRepo, msgRepo, userRepo, reactRepo, pinnedRepo, cfg.MaxWSConnections, pushNotifier, fileH)
 
 	var hubWg sync.WaitGroup
 	hubWg.Add(1)
@@ -115,7 +156,7 @@ func main() {
 		runtime.SetServiceSettings(*s, s.UpdatedAt)
 	}
 	serviceSettingsH := handler.NewServiceSettingsHandler(permRepo, serviceSettingsRepo, hub)
-	pushH := handler.NewPushHandler(pushClient)
+	pushH := handler.NewPushHandler(pushSubClient)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RealIP)
@@ -258,6 +299,16 @@ func main() {
 	hubCancel()
 	hubWg.Wait()
 	logger.Info("hub stopped")
+	if relayCancel != nil {
+		relayCancel()
+		relayWg.Wait()
+		logger.Info("outbox relay stopped")
+	}
+	if streamPublisher != nil {
+		if err := streamPublisher.Close(); err != nil {
+			logger.Errorf("outbox relay redis close: %v", err)
+		}
+	}
 	srvWg.Wait()
 	logger.Info("server goroutine exited")
 }

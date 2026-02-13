@@ -83,6 +83,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
   const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const usersInitRef = useRef(false);
+  const loadMoreLockRef = useRef(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserPublic | null>(null);
@@ -227,6 +228,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
   }, [search, sortKey, sortDir]);
 
   const reloadUsers = useCallback(() => {
+    loadMoreLockRef.current = false;
     setUsers([]);
     setUsersTotal(0);
     setUsersOffset(0);
@@ -237,8 +239,11 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
   }, [fetchUsers]);
 
   const loadMoreUsers = useCallback(() => {
-    if (loadingUsers || loadingMoreUsers || !hasMoreUsers) return;
-    fetchUsers(usersOffset, false);
+    if (loadMoreLockRef.current || loadingUsers || loadingMoreUsers || !hasMoreUsers) return;
+    loadMoreLockRef.current = true;
+    void fetchUsers(usersOffset, false).finally(() => {
+      loadMoreLockRef.current = false;
+    });
   }, [fetchUsers, hasMoreUsers, loadingMoreUsers, loadingUsers, usersOffset]);
 
   useEffect(() => {
@@ -500,6 +505,8 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
                 style={{ maxHeight: 'calc(100dvh - 260px)' }}
                 onScroll={(e) => {
                   const el = e.currentTarget;
+                  // Do not trigger infinite loading when list does not actually overflow vertically.
+                  if (el.scrollHeight <= el.clientHeight + 2) return;
                   const remain = el.scrollHeight - el.scrollTop - el.clientHeight;
                   if (remain < 220) loadMoreUsers();
                 }}

@@ -692,8 +692,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   connectWS: () => {
     const { ws: existing, wsReconnectTimer } = get();
-    if (existing && existing.readyState === WebSocket.OPEN) return;
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) return;
     if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+    if (wsReconnectTimer) set({ wsReconnectTimer: null });
 
     api.getSessionWsQuery().then((query) => {
       if (!query) return;
@@ -704,7 +705,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       socket.onopen = () => {
         const wasLongDisconnect = wsDisconnectedAt !== null && (Date.now() - wsDisconnectedAt) > WS_LONG_DISCONNECT_MS;
         wsDisconnectedAt = null;
-        set({ ws: socket, wsReconnectAttempt: 0 });
+        set({ ws: socket, wsReconnectAttempt: 0, wsReconnectTimer: null });
         if (wasLongDisconnect) {
           location.reload();
           return;
@@ -964,6 +965,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
 
           if (!newChats.some((c) => c.chat.id === msg.chat_id)) {
+            // If chat is unknown locally, fetch and insert it immediately so sidebar updates without tab switch.
+            api.getChat(msg.chat_id).then((chat) => {
+              const incoming = {
+                ...chat,
+                muted: chat.muted ?? false,
+                ...(msg ? { last_message: msg } : {}),
+              };
+              set((cur) => {
+                const exists = cur.chats.some((c) => c.chat.id === incoming.chat.id);
+                const merged = exists
+                  ? cur.chats.map((c) => (c.chat.id === incoming.chat.id ? { ...c, ...incoming } : c))
+                  : [incoming, ...cur.chats];
+                merged.sort((a, b) => {
+                  const at = a.last_message?.created_at || a.chat.created_at;
+                  const bt = b.last_message?.created_at || b.chat.created_at;
+                  return new Date(bt).getTime() - new Date(at).getTime();
+                });
+                return { chats: merged };
+              });
+            }).catch(() => {});
+            // Fallback full refresh for consistency.
             get().invalidateChatsCache();
             get().fetchChats();
           }
@@ -1167,17 +1189,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? `${actor_name} добавил(а) ${username} в группу`
           : `Пользователь ${username} добавлен в группу`;
         set((s) => ({ notification: text }));
-        // Если добавили текущего пользователя — обновляем список чатов и предзагружаем историю сообщений
+        // Always upsert chat immediately so UI updates in-place in all tabs.
+        api.getChat(chat_id).then((chat) => {
+          const incoming = { ...chat, muted: chat.muted ?? false };
+          set((s) => {
+            const exists = s.chats.some((c) => c.chat.id === chat_id);
+            const merged = exists
+              ? s.chats.map((c) => (c.chat.id === chat_id ? incoming : c))
+              : [incoming, ...s.chats];
+            merged.sort((a, b) => {
+              const at = a.last_message?.created_at || a.chat.created_at;
+              const bt = b.last_message?.created_at || b.chat.created_at;
+              return new Date(bt).getTime() - new Date(at).getTime();
+            });
+            return { chats: merged };
+          });
+        }).catch(() => {});
+
+        // If current user was added, refresh full list and preload messages for this chat.
         if (user_id === myId) {
+          get().invalidateChatsCache();
           get().fetchChats().then(() => {
             get().fetchMessages(chat_id);
           });
-        } else {
-          api.getChat(chat_id).then((chat) => {
-            set((s) => ({
-              chats: s.chats.map((c) => c.chat.id === chat_id ? chat : c),
-            }));
-          }).catch(() => {});
         }
         break;
       }
@@ -1197,9 +1231,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
         } else {
           api.getChat(chat_id).then((chat) => {
-            set((s) => ({
-              chats: s.chats.map((c) => c.chat.id === chat_id ? chat : c),
-            }));
+            const incoming = { ...chat, muted: chat.muted ?? false };
+            set((s) => {
+              const merged = s.chats.map((c) => (c.chat.id === chat_id ? incoming : c));
+              return { chats: merged };
+            });
           }).catch(() => {});
         }
         break;
@@ -1274,6 +1310,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { ws, wsReconnectTimer } = get();
     if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
     if (ws) ws.close();
+    for (const k of Object.keys(typingClearTimeouts)) {
+      clearTimeout(typingClearTimeouts[k]);
+      delete typingClearTimeouts[k];
+    }
     set(initialChatState);
     get().updateElectronBadge();
   },

@@ -62,13 +62,13 @@ export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
   }, [setActiveChat, onChatSelect]);
 
   // Вкладка "ЛИЧНЫЕ" должна содержать:
-  // - личные диалоги (personal) только если есть переписка (last_message != null)
+  // - личные диалоги (personal), если есть переписка ИЛИ непрочитанные (чтобы новые события показывались сразу)
   // - групповые чаты (group) всегда, чтобы новая группа сразу появлялась в списке
   const personalTabChats = useMemo(
     () =>
       chats.filter((c) => {
         if (c.chat.chat_type === 'group') return true;
-        if (c.chat.chat_type === 'personal') return c.last_message != null;
+        if (c.chat.chat_type === 'personal') return c.last_message != null || (c.unread_count || 0) > 0;
         return false;
       }),
     [chats]
