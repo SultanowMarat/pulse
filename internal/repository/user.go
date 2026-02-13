@@ -18,6 +18,9 @@ var ErrNotFound = errors.New("not found")
 // userCols — список колонок для SELECT, включая phone/company/position и disabled_at.
 const userCols = `id, username, email, COALESCE(phone,''), COALESCE(company,''), COALESCE(position,''), password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at`
 
+// userColsAliased — те же колонки с префиксом u. для запросов с JOIN (ListPage). COALESCE должен получать u.column.
+const userColsAliased = `u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.company,''), COALESCE(u.position,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at, u.disabled_at`
+
 type UserRepository struct {
 	pool *pgxpool.Pool
 }
@@ -222,10 +225,9 @@ func (r *UserRepository) ListPage(ctx context.Context, q string, limit, offset i
 	argsPage = append(argsPage, limit, offset)
 	limitPos := len(args) + 1
 	offsetPos := len(args) + 2
-	aliasedCols := "u." + strings.ReplaceAll(userCols, ", ", ", u.")
 	qry := fmt.Sprintf(
 		"SELECT %s FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id %s ORDER BY %s LIMIT $%d OFFSET $%d",
-		aliasedCols, where, orderBy, limitPos, offsetPos,
+		userColsAliased, where, orderBy, limitPos, offsetPos,
 	)
 	rows, err := r.pool.Query(ctx, qry, argsPage...)
 	if err != nil {
