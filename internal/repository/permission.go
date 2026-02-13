@@ -54,7 +54,7 @@ func (r *PermissionRepository) GetByUserIDs(ctx context.Context, userIDs []strin
 	rows, err := r.pool.Query(ctx,
 		`SELECT user_id, COALESCE(administrator, false), COALESCE(member, true), COALESCE(admin_all_groups, false), updated_at
 		 FROM user_permissions
-		 WHERE user_id = ANY($1)`,
+		 WHERE user_id = ANY($1::uuid[])`,
 		userIDs,
 	)
 	if err != nil {
