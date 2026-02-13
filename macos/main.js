@@ -1,6 +1,5 @@
 const { app, BrowserWindow, ipcMain, Menu, Notification, session } = require('electron');
 const path = require('path');
-const fs = require('fs');
 
 if (process.platform === 'darwin') {
   // Avoid stale GPU shader cache issues in packaged macOS builds.
@@ -14,7 +13,6 @@ const APP_URLS = (process.env.BUHCHAT_APP_URLS || process.env.BUHCHAT_APP_URL ||
   .map((s) => s.trim())
   .filter(Boolean);
 const SERVER_RETRY_MS = Math.max(5000, Number(process.env.BUHCHAT_SERVER_RETRY_MS || 15000) || 15000);
-const BUNDLED_APP_PATH = path.join(__dirname, 'app', 'index.html');
 const OFFLINE_PATH = path.join(__dirname, 'gate', 'offline.html');
 
 let isQuitting = false;
@@ -125,11 +123,9 @@ async function loadWindow(win, options = {}) {
     await loadFromServer(win, { clearSessionCache: forceRefresh });
     stopServerRetry(win);
   } catch (e) {
-    if (fs.existsSync(BUNDLED_APP_PATH)) {
-      await win.loadFile(BUNDLED_APP_PATH).catch(() => win.loadFile(OFFLINE_PATH));
-    } else {
-      await win.loadFile(OFFLINE_PATH);
-    }
+    // Fallback only to dedicated offline screen. Loading bundled web app from file://
+    // may break API auth/CORS and lead to stuck "Loading profile" state.
+    await win.loadFile(OFFLINE_PATH);
     // If network/server was unavailable on startup, auto-switch to fresh server UI
     // as soon as it becomes available.
     if (enableRetry) startServerRetry(win);

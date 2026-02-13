@@ -10,11 +10,21 @@ export function isDesktopApp(): boolean {
   return typeof window !== 'undefined' && !!(window as unknown as { electronAPI?: unknown }).electronAPI;
 }
 
-/** Текущий базовый URL (без завершающего слэша). В десктопе — всегда вшитый DEFAULT_PUBLIC_ORIGIN. */
+function trimTrailingSlash(url: string): string {
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+/** Текущий базовый URL (без завершающего слэша). */
 export function getApiBase(): string {
   if (typeof window === 'undefined') return '';
+  // Если UI загружен по http(s), всегда используем текущий origin.
+  // Это устраняет рассинхрон API/WS в desktop при смене домена сервера.
+  if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+    return trimTrailingSlash(window.location.origin);
+  }
+  // Для file:// (offline fallback в десктопе) используем встроенный origin сервера.
   if (isDesktopApp()) return DEFAULT_PUBLIC_ORIGIN;
-  return window.location.origin;
+  return trimTrailingSlash(window.location.origin);
 }
 
 /** URL для WebSocket: wss://host или ws://host (без path). */
