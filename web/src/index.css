@@ -140,7 +140,7 @@ html { scroll-behavior: smooth; }
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scroll-padding-bottom: 0.5rem;
+  scroll-padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 4rem));
   contain: layout style;
 }
 /* Контейнеры не должны вызывать горизонтальный скролл */

@@ -837,38 +837,40 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Messages ── */}
-      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 py-2 sm:py-3 space-y-0.5 scroll-smooth touch-pan-y">
-        {chatMessages.map((msg, i) => {
-          const prev = chatMessages[i - 1];
-          const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
-          const isOwn = msg.sender_id === user?.id;
-          const showAvatar = !isOwn && (!chatMessages[i + 1] || chatMessages[i + 1].sender_id !== msg.sender_id);
+      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 py-2 sm:py-3 scroll-smooth touch-pan-y">
+        <div className="min-h-full flex flex-col justify-end gap-0.5">
+          {chatMessages.map((msg, i) => {
+            const prev = chatMessages[i - 1];
+            const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
+            const isOwn = msg.sender_id === user?.id;
+            const showAvatar = !isOwn && (!chatMessages[i + 1] || chatMessages[i + 1].sender_id !== msg.sender_id);
 
-          return (
-            <div key={msg.id} id={`msg-${msg.id}`} className={`min-w-0 overflow-hidden ${highlightMsgId === msg.id ? 'animate-msg-highlight rounded-compass' : ''}`}>
-              {showDate && (
-                <div className="flex justify-center my-2.5 sm:my-3">
-                  <span className="px-3 py-1 bg-surface dark:bg-dark-elevated rounded-full text-[11px] text-txt-secondary dark:text-[#8b98a5] font-medium">
-                    {new Date(msg.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                  </span>
-                </div>
-              )}
-              {msg.content_type === 'system' ? (
-                <div className="flex justify-center my-1.5 sm:my-2">
-                  <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] bg-surface/90 dark:bg-dark-elevated px-3 py-1.5 rounded-full max-w-[85%] text-center">
-                    <SystemMessageContent content={msg.content} members={chat.members} onUserClick={(uid) => setUserCardId(uid)} />
-                  </span>
-                </div>
-              ) : (
-                <MsgBubble msg={msg} isOwn={isOwn} showAvatar={showAvatar} isGroup={chat.chat.chat_type === 'group'}
-                  onCtx={(e) => onCtx(e, msg)} onReply={() => setReplyTo(msg)}
-                  onReact={(emoji) => addReaction(msg.id, emoji)} myId={user?.id || ''}
-                  onScrollTo={scrollToMessage} onUserClick={(uid) => setUserCardId(uid)} />
-              )}
-            </div>
-          );
-        })}
-        <div ref={endRef} />
+            return (
+              <div key={msg.id} id={`msg-${msg.id}`} className={`min-w-0 overflow-hidden ${highlightMsgId === msg.id ? 'animate-msg-highlight rounded-compass' : ''}`}>
+                {showDate && (
+                  <div className="flex justify-center my-2.5 sm:my-3">
+                    <span className="px-3 py-1 bg-surface dark:bg-dark-elevated rounded-full text-[11px] text-txt-secondary dark:text-[#8b98a5] font-medium">
+                      {new Date(msg.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </span>
+                  </div>
+                )}
+                {msg.content_type === 'system' ? (
+                  <div className="flex justify-center my-1.5 sm:my-2">
+                    <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] bg-surface/90 dark:bg-dark-elevated px-3 py-1.5 rounded-full max-w-[85%] text-center">
+                      <SystemMessageContent content={msg.content} members={chat.members} onUserClick={(uid) => setUserCardId(uid)} />
+                    </span>
+                  </div>
+                ) : (
+                  <MsgBubble msg={msg} isOwn={isOwn} showAvatar={showAvatar} isGroup={chat.chat.chat_type === 'group'}
+                    onCtx={(e) => onCtx(e, msg)} onReply={() => setReplyTo(msg)}
+                    onReact={(emoji) => addReaction(msg.id, emoji)} myId={user?.id || ''}
+                    onScrollTo={scrollToMessage} onUserClick={(uid) => setUserCardId(uid)} />
+                )}
+              </div>
+            );
+          })}
+          <div ref={endRef} />
+        </div>
       </div>
 
       {/* ── Context Menu (ПКМ по сообщению) ── */}
