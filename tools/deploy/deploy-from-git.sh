@@ -19,3 +19,6 @@ fi
 
 [ ! -f .env ] && echo "Создайте .env: cp services/infra/.env.example .env" && exit 1
 docker compose up -d --build
+# После пересборки контейнеры (api, auth и т.д.) получают новые IP. Nginx кэширует upstream по имени
+# при старте — без перезапуска продолжает ходить на старый IP → 502. Перезапуск nginx перерезолвит имена.
+docker compose restart nginx
