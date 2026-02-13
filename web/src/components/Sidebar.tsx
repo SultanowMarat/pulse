@@ -7,7 +7,6 @@ import * as api from '../api';
 interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; /** Когда нав-рейл скрыт — показать кнопку «Показать панель» */ navHidden?: boolean; onShowNav?: () => void; }
 
 type ChatListTab = 'all' | 'personal' | 'favorites';
-const ALL_USERS_REFRESH_MS = 60_000;
 
 export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShowNav }: SidebarProps) {
   const { user } = useAuthStore();
@@ -20,7 +19,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [allUsers, setAllUsers] = useState<UserPublic[]>([]);
   const [allUsersLoading, setAllUsersLoading] = useState(false);
-  const [allUsersLoadedAt, setAllUsersLoadedAt] = useState(0);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; chat: ChatWithLastMessage } | null>(null);
   const [renameChat, setRenameChat] = useState<ChatWithLastMessage | null>(null);
   const myId = user?.id || '';
@@ -34,29 +32,14 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
   }, [user?.id, fetchChatsIfStale, fetchFavoritesIfStale]);
 
   useEffect(() => {
-    if (tab !== 'all') return;
-    const fresh = allUsersLoadedAt > 0 && (Date.now() - allUsersLoadedAt) < ALL_USERS_REFRESH_MS;
-    if (fresh) return;
-    let cancelled = false;
-    setAllUsersLoading(true);
-    api.listUsers()
-      .then((users) => {
-        if (cancelled) return;
-        setAllUsers(users);
-        setAllUsersLoadedAt(Date.now());
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Keep previous list if request failed; avoids empty flicker.
-        if (allUsersLoadedAt === 0) setAllUsers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAllUsersLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, allUsersLoadedAt]);
+    if (tab === 'all') {
+      setAllUsersLoading(true);
+      api.listUsers()
+        .then(setAllUsers)
+        .catch(() => setAllUsers([]))
+        .finally(() => setAllUsersLoading(false));
+    }
+  }, [tab]);
 
   // При переключении на «ВСЕ» — подгрузить чаты, если кеш пустой/устарел
   useEffect(() => {
@@ -92,10 +75,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
   );
 
   const groupChats = useMemo(() => chats.filter((c) => c.chat.chat_type === 'group'), [chats]);
-  const allTabFallbackChats = useMemo(
-    () => chats.filter((c) => c.chat.chat_type === 'personal'),
-    [chats]
-  );
 
   const filteredPersonal = useMemo(() => {
     let result = personalTabChats;
@@ -386,11 +365,10 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
                 }} />
             ))
           )
+        ) : allUsersLoading ? (
+          <p className="text-center text-sidebar-text text-[13px] py-8">Загрузка...</p>
         ) : (
           <>
-            {allUsersLoading && (
-              <p className="text-center text-sidebar-text text-[12px] py-2">Обновляем список...</p>
-            )}
             {groupChats.length > 0 && (
               <div className="pb-2">
                 {groupChats.map((chat) => (
@@ -411,25 +389,8 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
                 <div className="mx-4 h-px bg-sidebar-border/30" />
               </div>
             )}
-            {filteredAllUsers.length === 0 && allTabFallbackChats.length > 0 ? (
-              <>
-                {allTabFallbackChats.map((chat) => (
-                  <ChatItem key={chat.chat.id} chat={chat} active={chat.chat.id === activeChatId}
-                    myId={myId} typing={typingUsers[chat.chat.id]} onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(chat.chat.id)}
-                    onContextMenu={undefined} />
-                ))}
-                {notesChat && (
-                  <ChatItem key={notesChat.chat.id} chat={notesChat} active={notesChat.chat.id === activeChatId}
-                    myId={myId} typing={typingUsers[notesChat.chat.id]} onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(notesChat.chat.id)}
-                    onContextMenu={undefined} />
-                )}
-              </>
-            ) : filteredAllUsers.length === 0 && !notesChat ? (
-              allUsersLoading
-                ? <p className="text-center text-sidebar-text text-[13px] py-8">Загрузка...</p>
-                : <p className="text-center text-sidebar-text text-[13px] py-8">Нет пользователей</p>
+            {filteredAllUsers.length === 0 && !notesChat ? (
+              <p className="text-center text-sidebar-text text-[13px] py-8">Нет пользователей</p>
             ) : (
               <>
                 {filteredAllUsers.map((u) => {
