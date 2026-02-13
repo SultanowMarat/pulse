@@ -17,29 +17,30 @@ function syncAppHeightVar() {
   const vvH = vv?.height ?? innerH;
   const vvTop = vv?.offsetTop ?? 0;
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const isIOSStandalone = standalone && isIOSDevice();
 
   // iOS/PWA keyboard can report a very small visualViewport height, which creates
   // an extra gap under sticky composer. When keyboard is open, keep layout height
   // bound to innerHeight to avoid "double shrink" and big empty space.
   const keyboardLikelyOpen = innerH - vvH > 120;
-  const nextHeight = keyboardLikelyOpen ? innerH : Math.min(innerH, vvH);
+  // Для iOS standalone при открытой клавиатуре используем именно visual viewport:
+  // так шапка не уезжает вверх и последнее сообщение не отрывается от низа.
+  const useVisualViewportHeight = isIOSStandalone && keyboardLikelyOpen;
+  const visibleViewportHeight = Math.max(0, Math.round(vvH + vvTop));
+  const nextHeight = useVisualViewportHeight
+    ? Math.min(innerH, visibleViewportHeight || innerH)
+    : (keyboardLikelyOpen ? innerH : Math.min(innerH, vvH));
 
   document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
 
   // Поле ввода максимально внизу: при открытой клавиатуре — по низу visualViewport (как в Telegram).
   const rawComposerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
-  const isIOSStandalone = standalone && isIOSDevice();
-  // В iOS PWA над клавиатурой появляется системная accessory-панель (стрелки/Done).
-  // Смещаем композер ниже, чтобы перекрыть эту панель и убрать визуальный "второй ряд".
-  const IOS_ACCESSORY_BAR_PX = 44;
-  const composerBottom = isIOSStandalone && keyboardLikelyOpen
-    ? Math.max(0, rawComposerBottom - IOS_ACCESSORY_BAR_PX)
-    : rawComposerBottom;
+  const composerBottom = useVisualViewportHeight ? 0 : rawComposerBottom;
   document.documentElement.style.setProperty('--composer-bottom', `${composerBottom}px`);
 
   // В standalone/PWA и при открытой клавиатуре убираем нижний padding у композера:
   // это устраняет лишнюю пустую полосу снизу на iOS.
-  const keyboardOpen = rawComposerBottom > 60;
+  const keyboardOpen = rawComposerBottom > 60 || useVisualViewportHeight;
   if (keyboardOpen || standalone) {
     document.documentElement.style.setProperty('--composer-padding-bottom', '0');
   } else {
