@@ -151,17 +151,13 @@ export default function Messenger() {
         </div>
       )}
 
-      {/* ── Nav Rail (PWA: safe areas) ── */}
-      <nav className="hidden md:flex flex-col items-center w-[60px] min-w-[60px] bg-nav shrink-0 py-3 gap-0.5 safe-left" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {/* ── Nav Rail (кнопки слева): при «Скрыть» скрываем именно их, а не список чатов) ── */}
+      <nav className={`hidden md:flex flex-col items-center w-[60px] min-w-[60px] bg-nav shrink-0 py-3 gap-0.5 safe-left ${commandsHidden ? 'md:hidden' : ''}`} style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button
           type="button"
-          className={`w-11 h-11 mb-2 rounded-full flex items-center justify-center border border-white/5 transition-colors ${
-            commandsHidden
-              ? 'bg-[#262a31] text-white'
-              : 'bg-[#1f2228] text-[#7f8792] hover:text-white hover:bg-[#262a31]'
-          }`}
-          title={commandsHidden ? 'Показать список чатов' : 'Скрыть список чатов'}
-          aria-label={commandsHidden ? 'Показать список чатов' : 'Скрыть список чатов'}
+          className="w-11 h-11 mb-2 rounded-full flex items-center justify-center border border-white/5 transition-colors bg-[#1f2228] text-[#7f8792] hover:text-white hover:bg-[#262a31]"
+          title="Скрыть панель кнопок"
+          aria-label="Скрыть панель кнопок"
           onClick={toggleCommands}
         >
           <IconMenu size={20} />
@@ -176,9 +172,9 @@ export default function Messenger() {
         <div className="flex-1" />
       </nav>
 
-      {/* ── Sidebar ── */}
-      <div className={`${activeChatId && !sidebarOpen ? 'hidden md:flex' : 'flex'} ${commandsHidden ? 'md:hidden' : ''} flex-col w-full max-w-full md:w-[300px] lg:w-[320px] shrink-0 min-w-0 border-r border-surface-border dark:border-dark-border overflow-x-hidden`}>
-        <Sidebar onChatSelect={handleChatSelect} onOpenProfile={() => setShowProfile(true)} />
+      {/* ── Sidebar (список чатов): не скрываем при commandsHidden — скрываются только кнопки нав-рейла ── */}
+      <div className={`${activeChatId && !sidebarOpen ? 'hidden md:flex' : 'flex'} flex-col w-full max-w-full md:w-[300px] lg:w-[320px] shrink-0 min-w-0 border-r border-surface-border dark:border-dark-border overflow-x-hidden`}>
+        <Sidebar onChatSelect={handleChatSelect} onOpenProfile={() => setShowProfile(true)} navHidden={commandsHidden} onShowNav={toggleCommands} />
       </div>
 
       {/* ── Chat Area ── */}

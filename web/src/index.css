@@ -4,6 +4,9 @@
 
 :root {
   --app-height: 100svh;
+  --composer-bottom: 0px;
+  /* Нижний отступ композера: минимум 2px для touch, иначе safe-area (PWA/вырез/домашняя полоска). При открытой клавиатуре переопределяется в main.tsx на 0. */
+  --composer-padding-bottom: max(2px, env(safe-area-inset-bottom));
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

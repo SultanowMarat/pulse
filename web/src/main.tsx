@@ -8,6 +8,7 @@ function syncAppHeightVar() {
   const vv = window.visualViewport;
   const innerH = window.innerHeight;
   const vvH = vv?.height ?? innerH;
+  const vvTop = vv?.offsetTop ?? 0;
 
   // iOS/PWA keyboard can report a very small visualViewport height, which creates
   // an extra gap under sticky composer. When keyboard is open, keep layout height
@@ -16,6 +17,18 @@ function syncAppHeightVar() {
   const nextHeight = keyboardLikelyOpen ? innerH : Math.min(innerH, vvH);
 
   document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
+
+  // Поле ввода максимально внизу: при открытой клавиатуре — по низу visualViewport (как в Telegram).
+  const composerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
+  document.documentElement.style.setProperty('--composer-bottom', `${composerBottom}px`);
+
+  // При открытой клавиатуре убираем нижний отступ у композера, чтобы не было зазора над клавиатурой (PWA/разные модели).
+  const keyboardOpen = composerBottom > 60;
+  if (keyboardOpen) {
+    document.documentElement.style.setProperty('--composer-padding-bottom', '0');
+  } else {
+    document.documentElement.style.removeProperty('--composer-padding-bottom');
+  }
 }
 
 if (typeof window !== 'undefined') {

@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useAuthStore, useChatStore } from '../store';
-import { Avatar, Modal, IconSearch, IconUsers, IconEdit, IconTrash, IconX, formatTime, TypingDots } from './ui';
+import { Avatar, Modal, IconSearch, IconUsers, IconEdit, IconTrash, IconX, IconMenu, formatTime, TypingDots } from './ui';
 import type { UserPublic, ChatWithLastMessage, Message } from '../types';
 import * as api from '../api';
 
-interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; }
+interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; /** Когда нав-рейл скрыт — показать кнопку «Показать панель» */ navHidden?: boolean; onShowNav?: () => void; }
 
 type ChatListTab = 'all' | 'personal' | 'favorites';
 
-export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
+export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShowNav }: SidebarProps) {
   const { user } = useAuthStore();
   const { chats, activeChatId, setActiveChat, typingUsers, onlineUsers, favoriteChatIds, fetchChatsIfStale, fetchFavoritesIfStale, createPersonalChat, createGroupChat, searchUsers, searchMessages, leaveChat, setChatMuted, setNotification } = useChatStore();
   const [search, setSearch] = useState('');
@@ -220,10 +220,15 @@ export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
         </div>
       </div>
 
-      {/* Desktop header (isolated) */}
+      {/* Desktop header (isolated): при скрытом нав-рейле — кнопка «Показать панель» */}
       <div className="hidden md:block px-4 pb-2 shrink-0 pt-3">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sidebar-title font-semibold text-white flex-1 min-w-0 truncate text-left">Чаты</h2>
+          {navHidden && onShowNav ? (
+            <button type="button" onClick={onShowNav} className="w-9 h-9 rounded-full flex items-center justify-center bg-sidebar-hover text-white hover:brightness-110 transition-colors shrink-0" title="Показать панель кнопок" aria-label="Показать панель кнопок">
+              <IconMenu size={20} />
+            </button>
+          ) : null}
+          <h2 className={`text-sidebar-title font-semibold text-white min-w-0 truncate text-left ${navHidden && onShowNav ? 'flex-1 ml-2' : 'flex-1'}`}>Чаты</h2>
           <div className="flex items-center gap-1 shrink-0">
             <SidebarBtn tip="Новая группа" onClick={() => setShowNewGroup(true)}><IconUsers size={18} /></SidebarBtn>
             {onOpenProfile && (

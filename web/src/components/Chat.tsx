@@ -1050,8 +1050,11 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Input ── */}
-      {/* NOTE: input popovers (emoji picker, mentions) must not be clipped by parent overflow. */}
-      <div ref={composerRef} className="shrink-0 sticky bottom-0 z-20 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible">
+      {/* На мобильных: композер максимально внизу (fixed по low visualViewport); при вводе — вплотную к клавиатуре. На десктопе — sticky. */}
+      <div
+        ref={composerRef}
+        className="shrink-0 z-20 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[var(--composer-padding-bottom,max(2px,env(safe-area-inset-bottom)))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible fixed left-0 right-0 bottom-[var(--composer-bottom)] md:static md:sticky md:bottom-0"
+      >
         <div className="relative min-w-0 max-w-full overflow-visible" ref={inputEmojiPickerRef}>
           <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
             <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
