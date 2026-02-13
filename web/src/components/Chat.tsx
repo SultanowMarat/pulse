@@ -676,9 +676,9 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   }, [hasTypingInHeader]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-x-hidden" onClick={() => setCtxMenu(null)}>
+    <div className="h-[100svh] md:h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
       {/* ── Header ── */}
-      <div className="shrink-0 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border min-w-0 overflow-hidden">
+      <div className="shrink-0 sticky top-0 z-20 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border bg-white dark:bg-dark-bg min-w-0 overflow-hidden">
         {onOpenProfile && (
           <button type="button" onClick={(e) => { e.stopPropagation(); onOpenProfile(); }} className="md:hidden p-0.5 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-colors shrink-0" title="Профиль" aria-label="Профиль">
             <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={32} />
@@ -837,7 +837,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Messages ── */}
-      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 sm:px-4 py-2 sm:py-3 space-y-0.5 scroll-smooth touch-pan-y">
+      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 py-2 sm:py-3 space-y-0.5 scroll-smooth touch-pan-y">
         {chatMessages.map((msg, i) => {
           const prev = chatMessages[i - 1];
           const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
@@ -930,7 +930,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
       {/* ── Input ── */}
       {/* NOTE: input popovers (emoji picker, mentions) must not be clipped by parent overflow. */}
-      <div ref={composerRef} className="shrink-0 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible">
+      <div ref={composerRef} className="shrink-0 sticky bottom-0 z-20 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible">
         <div className="relative min-w-0 max-w-full overflow-visible" ref={inputEmojiPickerRef}>
           <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
             <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />

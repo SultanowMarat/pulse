@@ -146,9 +146,9 @@ export default function Messenger() {
       </div>
 
       {/* ── Chat Area ── */}
-      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
+      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 h-[100svh] md:h-auto overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
         {activeChatId ? (
-          <div className="flex flex-1 h-full min-w-0 overflow-hidden">
+          <div className="flex flex-1 h-full min-h-0 min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden transition-[opacity] duration-150 ease-out">
               <Chat onBack={() => setSidebarOpen(true)} onOpenInfo={() => setShowInfo(true)} onOpenProfile={() => setShowProfile(true)} />
             </div>
