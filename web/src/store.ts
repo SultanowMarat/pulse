@@ -17,9 +17,31 @@ function normalizeMessageFileName(m: Message): Message {
 const SESSION_ID_KEY = 'session_id';
 const SESSION_SECRET_KEY = 'session_secret';
 
+const PROFILE_LOAD_TIMEOUT_MS = 15000;
+
+function profileLoadErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    if (err.message === 'Failed to fetch' || err.message.includes('NetworkError')) return 'Нет связи с сервером. Проверьте интернет и повторите.';
+    return err.message;
+  }
+  return 'Не удалось загрузить профиль';
+}
+
+/** getMe с таймаутом, чтобы не зависать на «Загрузка профиля...» при недоступном сервере. */
+async function getMeWithTimeout(): Promise<Awaited<ReturnType<typeof api.getMe>>> {
+  return Promise.race([
+    api.getMe(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Таймаут. Сервер не отвечает.')), PROFILE_LOAD_TIMEOUT_MS)
+    ),
+  ]);
+}
+
 interface AuthState {
   user: UserPublic | null;
   isAuthenticated: boolean;
+  /** Сообщение об ошибке загрузки профиля (сеть / сервер); сбрасывается при повторной попытке или успехе. */
+  profileLoadError: string | null;
   requestCode: (email: string) => Promise<boolean>;
   verifyCode: (email: string, code: string, deviceName?: string) => Promise<void>;
   logout: () => void;
@@ -32,6 +54,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
+  profileLoadError: null,
 
   init: () => {
     const sessionId = localStorage.getItem(SESSION_ID_KEY);
@@ -66,43 +89,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     unsubscribePushIfEnabled().catch(() => {});
     localStorage.removeItem(SESSION_ID_KEY);
     localStorage.removeItem(SESSION_SECRET_KEY);
-    set({ user: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false, profileLoadError: null });
     useChatStore.getState().reset();
   },
 
   loadUser: async () => {
+    set({ profileLoadError: null });
     try {
-      const user = await api.getMe();
-      set({ user });
+      const user = await getMeWithTimeout();
+      set({ user, profileLoadError: null });
     } catch (err) {
       if (err instanceof api.ApiError && err.status === 401) {
         get().logout();
       } else {
-        set({ user: null });
+        set({ user: null, profileLoadError: profileLoadErrorMessage(err) });
       }
     }
   },
 
   /** Загрузка профиля с однократным повтором при 401 (сессия могла ещё не попасть в Redis). */
   loadUserOrRetry: async () => {
+    set({ profileLoadError: null });
     try {
-      const user = await api.getMe();
-      set({ user });
+      const user = await getMeWithTimeout();
+      set({ user, profileLoadError: null });
     } catch (err) {
       if (err instanceof api.ApiError && err.status === 401) {
         await new Promise((r) => setTimeout(r, 400));
         try {
-          const user = await api.getMe();
-          set({ user });
+          const user = await getMeWithTimeout();
+          set({ user, profileLoadError: null });
         } catch (retryErr) {
           if (retryErr instanceof api.ApiError && (retryErr as api.ApiError).status === 401) {
             get().logout();
           } else {
-            set({ user: null });
+            set({ user: null, profileLoadError: profileLoadErrorMessage(retryErr) });
           }
         }
       } else {
-        set({ user: null });
+        set({ user: null, profileLoadError: profileLoadErrorMessage(err) });
       }
     }
   },

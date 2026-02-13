@@ -10,7 +10,7 @@ import ChatInfo from '../components/ChatInfo';
 const LEFT_COMMANDS_HIDDEN_KEY = 'left-commands-hidden';
 
 export default function Messenger() {
-  const { user, logout, updateProfile, loadUser } = useAuthStore();
+  const { user, logout, updateProfile, loadUser, profileLoadError } = useAuthStore();
   const { activeChatId, chats, connectWS, disconnectWS, fetchChats, fetchFavorites, hydrateFavoritesFromStorage, setActiveChat, notification, setNotification, appStatus } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [commandsHidden, setCommandsHidden] = useState(false);
@@ -45,9 +45,14 @@ export default function Messenger() {
     });
   }, []);
 
+  const loadUserRequestedRef = useRef(false);
   useEffect(() => {
-    if (user === null) loadUser();
-  }, [user, loadUser]);
+    if (user != null) loadUserRequestedRef.current = false;
+    if (user === null && !profileLoadError && !loadUserRequestedRef.current) {
+      loadUserRequestedRef.current = true;
+      loadUser();
+    }
+  }, [user, profileLoadError, loadUser]);
 
   useEffect(() => {
     const meId = user?.id;
@@ -84,12 +89,28 @@ export default function Messenger() {
   if (user === null) {
     return (
       <div className="h-full flex items-center justify-center bg-surface dark:bg-dark-bg">
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3" />
-          <p className="text-txt-secondary dark:text-[#8b98a5] text-[14px]">Загрузка профиля...</p>
-          <button type="button" onClick={() => loadUser()} className="mt-2 text-[13px] text-primary hover:underline">
-            Повторить
-          </button>
+        <div className="text-center max-w-[280px]">
+          {profileLoadError ? (
+            <>
+              <p className="text-txt-secondary dark:text-[#8b98a5] text-[14px] mb-1">Не удалось загрузить профиль</p>
+              <p className="text-txt-muted dark:text-[#6e7a86] text-[13px] mb-4 break-words">{profileLoadError}</p>
+            </>
+          ) : (
+            <>
+              <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-txt-secondary dark:text-[#8b98a5] text-[14px]">Загрузка профиля...</p>
+            </>
+          )}
+          <div className="flex flex-col sm:flex-row gap-2 justify-center items-center mt-3">
+            <button type="button" onClick={() => loadUser()} className="text-[13px] text-primary hover:underline">
+              Повторить
+            </button>
+            {profileLoadError && (
+              <button type="button" onClick={() => logout()} className="text-[13px] text-txt-muted dark:text-[#6e7a86] hover:underline flex items-center gap-1">
+                <IconLogout /> Выйти
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
