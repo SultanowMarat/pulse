@@ -3,6 +3,13 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
+function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  return /iP(hone|od|ad)/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function syncAppHeightVar() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const vv = window.visualViewport;
@@ -20,12 +27,19 @@ function syncAppHeightVar() {
   document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
 
   // Поле ввода максимально внизу: при открытой клавиатуре — по низу visualViewport (как в Telegram).
-  const composerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
+  const rawComposerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
+  const isIOSStandalone = standalone && isIOSDevice();
+  // В iOS PWA над клавиатурой появляется системная accessory-панель (стрелки/Done).
+  // Смещаем композер ниже, чтобы перекрыть эту панель и убрать визуальный "второй ряд".
+  const IOS_ACCESSORY_BAR_PX = 44;
+  const composerBottom = isIOSStandalone && keyboardLikelyOpen
+    ? Math.max(0, rawComposerBottom - IOS_ACCESSORY_BAR_PX)
+    : rawComposerBottom;
   document.documentElement.style.setProperty('--composer-bottom', `${composerBottom}px`);
 
   // В standalone/PWA и при открытой клавиатуре убираем нижний padding у композера:
   // это устраняет лишнюю пустую полосу снизу на iOS.
-  const keyboardOpen = composerBottom > 60;
+  const keyboardOpen = rawComposerBottom > 60;
   if (keyboardOpen || standalone) {
     document.documentElement.style.setProperty('--composer-padding-bottom', '0');
   } else {
