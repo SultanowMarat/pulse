@@ -74,6 +74,7 @@ services:
       VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"
       VAPID_PRIVATE_KEY: "${VAPID_PRIVATE_KEY:-}"
       VAPID_KEYS_FILE: "/app/config/vapid.json"
+      CHOWN_DIRS: "/app/config"
     volumes:
       - ./data/push:/app/config
       - ./services/push/logs:/var/log/messenger
@@ -150,6 +151,7 @@ services:
       PUSH_SERVICE_URL: "http://push:8082"
       PUSH_VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"
       VAPID_KEYS_FILE: "/app/vapid/vapid.json"
+      CHOWN_DIRS: "/app/vapid"
       BACKUP_AUDIO_DIR: "/app/audio_uploads"
       FILE_SERVICE_URL: "http://files:8083"
       AUDIO_SERVICE_URL: "http://audio:8084"
@@ -167,6 +169,8 @@ services:
       start_period: 90s
     depends_on:
       postgres:
+        condition: service_healthy
+      push:
         condition: service_healthy
     restart: unless-stopped
 
