@@ -7,7 +7,6 @@ import * as api from '../api';
 interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; /** Когда нав-рейл скрыт — показать кнопку «Показать панель» */ navHidden?: boolean; onShowNav?: () => void; }
 
 type ChatListTab = 'all' | 'personal' | 'favorites';
-const ALL_USERS_REFRESH_MS = 60_000;
 
 export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShowNav }: SidebarProps) {
   const { user } = useAuthStore();
@@ -18,9 +17,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
   const [globalLoading, setGlobalLoading] = useState(false);
   const [tab, setTab] = useState<ChatListTab>('all');
   const [showNewGroup, setShowNewGroup] = useState(false);
-  const [allUsers, setAllUsers] = useState<UserPublic[]>([]);
-  const [allUsersLoading, setAllUsersLoading] = useState(false);
-  const [allUsersLoadedAt, setAllUsersLoadedAt] = useState(0);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; chat: ChatWithLastMessage } | null>(null);
   const [renameChat, setRenameChat] = useState<ChatWithLastMessage | null>(null);
   const myId = user?.id || '';
@@ -32,31 +28,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
       fetchFavoritesIfStale();
     }
   }, [user?.id, fetchChatsIfStale, fetchFavoritesIfStale]);
-
-  useEffect(() => {
-    if (tab !== 'all') return;
-    const fresh = allUsersLoadedAt > 0 && (Date.now() - allUsersLoadedAt) < ALL_USERS_REFRESH_MS;
-    if (fresh) return;
-    let cancelled = false;
-    setAllUsersLoading(true);
-    api.listUsers()
-      .then((users) => {
-        if (cancelled) return;
-        setAllUsers(users);
-        setAllUsersLoadedAt(Date.now());
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Keep previous list if request failed; avoids empty flicker.
-        if (allUsersLoadedAt === 0) setAllUsers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAllUsersLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, allUsersLoadedAt]);
 
   // При переключении на «ВСЕ» — подгрузить чаты, если кеш пустой/устарел
   useEffect(() => {
@@ -91,11 +62,7 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     [chats]
   );
 
-  const groupChats = useMemo(() => chats.filter((c) => c.chat.chat_type === 'group'), [chats]);
-  const allTabFallbackChats = useMemo(
-    () => chats.filter((c) => c.chat.chat_type === 'personal'),
-    [chats]
-  );
+  const allTabChats = useMemo(() => chats, [chats]);
 
   const filteredPersonal = useMemo(() => {
     let result = personalTabChats;
@@ -124,29 +91,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     [favoriteChats]
   );
 
-  const normalizeForSearch = useCallback((s: string): string => {
-    const cyrToLat: Record<string, string> = {
-      а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z',
-      и: 'i', й: 'j', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
-      с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch',
-      ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
-    };
-    return s.toLowerCase().split('').map((c) => cyrToLat[c] ?? c).join('');
-  }, []);
-
-  const filteredAllUsers = useMemo(() => {
-    if (!search.trim()) return allUsers;
-    const q = search.trim().toLowerCase();
-    const qLat = normalizeForSearch(search.trim());
-    return allUsers.filter(
-      (u) =>
-        u.username.toLowerCase().includes(q) ||
-        normalizeForSearch(u.username).includes(qLat) ||
-        (u.email && (u.email.toLowerCase().includes(q) || normalizeForSearch(u.email).includes(qLat))) ||
-        (u.phone && u.phone.includes(q))
-    );
-  }, [allUsers, search, normalizeForSearch]);
-
   const personalChatByUserId = useMemo(() => {
     const map: Record<string, ChatWithLastMessage> = {};
     for (const c of chats) {
@@ -156,8 +100,6 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     }
     return map;
   }, [chats, myId]);
-
-  const notesChat = useMemo(() => chats.find((c) => c.chat.chat_type === 'notes'), [chats]);
 
   useEffect(() => {
     const q = search.trim();
@@ -388,78 +330,19 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
           )
         ) : (
           <>
-            {allUsersLoading && (
-              <p className="text-center text-sidebar-text text-[12px] py-2">Обновляем список...</p>
-            )}
-            {groupChats.length > 0 && (
-              <div className="pb-2">
-                {groupChats.map((chat) => (
-                  <ChatItem
-                    key={chat.chat.id}
-                    chat={chat}
-                    active={chat.chat.id === activeChatId}
-                    myId={myId}
-                    typing={typingUsers[chat.chat.id]}
-                    onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(chat.chat.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setCtxMenu({ x: e.clientX, y: e.clientY, chat });
-                    }}
-                  />
-                ))}
-                <div className="mx-4 h-px bg-sidebar-border/30" />
-              </div>
-            )}
-            {filteredAllUsers.length === 0 && allTabFallbackChats.length > 0 ? (
-              <>
-                {allTabFallbackChats.map((chat) => (
-                  <ChatItem key={chat.chat.id} chat={chat} active={chat.chat.id === activeChatId}
-                    myId={myId} typing={typingUsers[chat.chat.id]} onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(chat.chat.id)}
-                    onContextMenu={undefined} />
-                ))}
-                {notesChat && (
-                  <ChatItem key={notesChat.chat.id} chat={notesChat} active={notesChat.chat.id === activeChatId}
-                    myId={myId} typing={typingUsers[notesChat.chat.id]} onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(notesChat.chat.id)}
-                    onContextMenu={undefined} />
-                )}
-              </>
-            ) : filteredAllUsers.length === 0 && !notesChat ? (
-              allUsersLoading
-                ? <p className="text-center text-sidebar-text text-[13px] py-8">Загрузка...</p>
-                : <p className="text-center text-sidebar-text text-[13px] py-8">Нет пользователей</p>
+            {allTabChats.length === 0 ? (
+              <p className="text-center text-sidebar-text text-[13px] py-8">Нет чатов</p>
             ) : (
-              <>
-                {filteredAllUsers.map((u) => {
-                  const existingChat = personalChatByUserId[u.id];
-                  if (existingChat) {
-                    return (
-                      <ChatItem key={existingChat.chat.id} chat={existingChat} active={existingChat.chat.id === activeChatId}
-                        myId={myId} typing={typingUsers[existingChat.chat.id]} onlineUsers={onlineUsers}
-                        onClick={() => handleChatClick(existingChat.chat.id)}
-                        onContextMenu={undefined} />
-                    );
-                  }
-                  return (
-                    <UserRow key={u.id} user={u} online={onlineUsers[u.id] ?? u.is_online}
-                      onClick={async () => {
-                        try {
-                          const chat = await createPersonalChat(u.id);
-                          setActiveChat(chat.chat.id);
-                          onChatSelect();
-                        } catch { /* */ }
-                      }} />
-                  );
-                })}
-                {notesChat && (
-                  <ChatItem key={notesChat.chat.id} chat={notesChat} active={notesChat.chat.id === activeChatId}
-                    myId={myId} typing={typingUsers[notesChat.chat.id]} onlineUsers={onlineUsers}
-                    onClick={() => handleChatClick(notesChat.chat.id)}
-                    onContextMenu={undefined} />
-                )}
-              </>
+              allTabChats.map((chat) => (
+                <ChatItem key={chat.chat.id} chat={chat} active={chat.chat.id === activeChatId}
+                  myId={myId} typing={typingUsers[chat.chat.id]} onlineUsers={onlineUsers}
+                  onClick={() => handleChatClick(chat.chat.id)}
+                  onContextMenu={(e) => {
+                    if (chat.chat.chat_type !== 'group') return;
+                    e.preventDefault();
+                    setCtxMenu({ x: e.clientX, y: e.clientY, chat });
+                  }} />
+              ))
             )}
           </>
         )}
