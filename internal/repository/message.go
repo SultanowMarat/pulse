@@ -57,6 +57,71 @@ func (r *MessageRepository) GetByID(ctx context.Context, id string) (*model.Mess
 	return m, nil
 }
 
+// MessageMeta contains lightweight message fields for hot update paths.
+type MessageMeta struct {
+	ID       string
+	ChatID   string
+	SenderID string
+	FileURL  string
+}
+
+// GetMetaByID returns lightweight message fields without joins.
+func (r *MessageRepository) GetMetaByID(ctx context.Context, id string) (*MessageMeta, error) {
+	defer logger.DeferLogDuration("msg.GetMetaByID", time.Now())()
+	meta := &MessageMeta{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, chat_id, sender_id, file_url
+		 FROM messages
+		 WHERE id = $1`, id,
+	).Scan(&meta.ID, &meta.ChatID, &meta.SenderID, &meta.FileURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("msgRepo.GetMetaByID: %w", err)
+	}
+	return meta, nil
+}
+
+// GetByIDs returns messages by IDs (with sender) as a map keyed by message ID.
+func (r *MessageRepository) GetByIDs(ctx context.Context, ids []string) (map[string]*model.Message, error) {
+	defer logger.DeferLogDuration("msg.GetByIDs", time.Now())()
+	out := make(map[string]*model.Message, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.id, m.chat_id, m.sender_id, m.content, m.content_type, m.file_url, m.file_name, m.file_size, m.status,
+		        m.reply_to_id, m.edited_at, m.is_deleted, m.created_at,
+		        u.id, u.username, u.avatar_url, u.is_online, u.last_seen_at
+		 FROM messages m
+		 JOIN users u ON u.id = m.sender_id
+		 WHERE m.id = ANY($1::uuid[])`,
+		ids,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("msgRepo.GetByIDs query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		msg := &model.Message{}
+		sender := &model.UserPublic{}
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.ContentType, &msg.FileURL, &msg.FileName, &msg.FileSize, &msg.Status,
+			&msg.ReplyToID, &msg.EditedAt, &msg.IsDeleted, &msg.CreatedAt,
+			&sender.ID, &sender.Username, &sender.AvatarURL, &sender.IsOnline, &sender.LastSeenAt); err != nil {
+			return nil, fmt.Errorf("msgRepo.GetByIDs scan: %w", err)
+		}
+		msg.Sender = sender
+		out[msg.ID] = msg
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("msgRepo.GetByIDs rows: %w", err)
+	}
+	return out, nil
+}
+
 func (r *MessageRepository) GetChatMessages(ctx context.Context, chatID, userID string, limit, offset int) ([]model.Message, error) {
 	defer logger.DeferLogDuration("msg.GetChatMessages", time.Now())()
 	rows, err := r.pool.Query(ctx,
@@ -118,6 +183,50 @@ func (r *MessageRepository) GetLastMessageForUser(ctx context.Context, chatID, u
 	}
 	m.Sender = sender
 	return m, nil
+}
+
+// GetLastMessagesForUserChats returns last visible message per chat for the user.
+func (r *MessageRepository) GetLastMessagesForUserChats(ctx context.Context, userID string, chatIDs []string) (map[string]*model.Message, error) {
+	defer logger.DeferLogDuration("msg.GetLastMessagesForUserChats", time.Now())()
+	out := make(map[string]*model.Message, len(chatIDs))
+	if len(chatIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT ON (m.chat_id)
+		        m.id, m.chat_id, m.sender_id, m.content, m.content_type, m.file_url, m.file_name, m.file_size, m.status,
+		        m.reply_to_id, m.edited_at, m.is_deleted, m.created_at,
+		        u.id, u.username, u.avatar_url, u.is_online, u.last_seen_at
+		 FROM messages m
+		 JOIN users u ON u.id = m.sender_id
+		 JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+		 WHERE m.chat_id = ANY($2::uuid[])
+		   AND m.created_at > cm.cleared_at
+		 ORDER BY m.chat_id, m.created_at DESC`,
+		userID,
+		chatIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("msgRepo.GetLastMessagesForUserChats query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		msg := &model.Message{}
+		sender := &model.UserPublic{}
+		if err := rows.Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Content, &msg.ContentType, &msg.FileURL, &msg.FileName, &msg.FileSize, &msg.Status,
+			&msg.ReplyToID, &msg.EditedAt, &msg.IsDeleted, &msg.CreatedAt,
+			&sender.ID, &sender.Username, &sender.AvatarURL, &sender.IsOnline, &sender.LastSeenAt); err != nil {
+			return nil, fmt.Errorf("msgRepo.GetLastMessagesForUserChats scan: %w", err)
+		}
+		msg.Sender = sender
+		out[msg.ChatID] = msg
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("msgRepo.GetLastMessagesForUserChats rows: %w", err)
+	}
+	return out, nil
 }
 
 func (r *MessageRepository) MarkAsRead(ctx context.Context, chatID, userID string) error {

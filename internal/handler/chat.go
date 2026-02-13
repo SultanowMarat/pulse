@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/messenger/internal/cache"
 	"github.com/messenger/internal/logger"
 	"github.com/messenger/internal/middleware"
 	"github.com/messenger/internal/model"
@@ -23,10 +25,11 @@ type ChatHandler struct {
 	msgRepo  *repository.MessageRepository
 	hub      *ws.Hub
 	fileH    *FileHandler
+	cache    *cache.ChatCache
 }
 
-func NewChatHandler(chatRepo *repository.ChatRepository, userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, msgRepo *repository.MessageRepository, hub *ws.Hub, fileH *FileHandler) *ChatHandler {
-	return &ChatHandler{chatRepo: chatRepo, userRepo: userRepo, permRepo: permRepo, msgRepo: msgRepo, hub: hub, fileH: fileH}
+func NewChatHandler(chatRepo *repository.ChatRepository, userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, msgRepo *repository.MessageRepository, hub *ws.Hub, fileH *FileHandler, cache *cache.ChatCache) *ChatHandler {
+	return &ChatHandler{chatRepo: chatRepo, userRepo: userRepo, permRepo: permRepo, msgRepo: msgRepo, hub: hub, fileH: fileH, cache: cache}
 }
 
 type CreatePersonalChatRequest struct {
@@ -92,6 +95,7 @@ func (h *ChatHandler) CreatePersonalChat(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
+	h.invalidateChatCaches(r.Context(), chat.ID, currentUserID, req.UserID)
 
 	enriched, err := h.enrichChat(r.Context(), chat, currentUserID)
 	if err != nil {
@@ -161,6 +165,7 @@ func (h *ChatHandler) CreateGroupChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	h.invalidateChatCaches(r.Context(), chat.ID, append([]string{currentUserID}, req.MemberIDs...)...)
 
 	enriched, err := h.enrichChat(r.Context(), chat, currentUserID)
 	if err != nil {
@@ -186,36 +191,27 @@ func (h *ChatHandler) GetUserChats(w http.ResponseWriter, r *http.Request) {
 		logger.Errorf("GetUserChats ensure general chat: %v", err)
 	}
 
-	chats, err := h.chatRepo.GetUserChats(ctx, userID)
+	if h.cache != nil {
+		var cached []model.ChatWithLastMessage
+		hit, err := h.cache.UserChats(ctx, userID, &cached)
+		if err != nil {
+			logger.Errorf("GetUserChats cache read user=%s: %v", userID, err)
+		}
+		if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
+
+	result, err := h.buildUserChats(ctx, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get chats")
 		return
 	}
 
-	result := make([]model.ChatWithLastMessage, 0, len(chats)+1)
-	for i := range chats {
-		if chats[i].ChatType == model.ChatTypeNotes {
-			continue
-		}
-		enriched, err := h.enrichChat(ctx, &chats[i], userID)
-		if err != nil {
-			continue
-		}
-		result = append(result, *enriched)
-	}
-
-	notesChat, err := h.chatRepo.GetOrCreateNotesChat(ctx, userID)
-	if err != nil {
-		logger.Errorf("GetUserChats get or create notes chat: %v", err)
-	} else {
-		if err := h.userRepo.AddFavorite(ctx, userID, notesChat.ID); err != nil {
-			logger.Errorf("GetUserChats add notes to favorites: %v", err)
-		}
-		enrichedNotes, err := h.enrichChat(ctx, notesChat, userID)
-		if err != nil {
-			logger.Errorf("GetUserChats enrich notes chat: %v", err)
-		} else {
-			result = append(result, *enrichedNotes)
+	if h.cache != nil {
+		if err := h.cache.SetUserChats(ctx, userID, result); err != nil {
+			logger.Errorf("GetUserChats cache write user=%s: %v", userID, err)
 		}
 	}
 
@@ -240,6 +236,11 @@ func (h *ChatHandler) ensureGeneralChatMember(ctx context.Context, userID string
 	member := &model.ChatMember{ChatID: chat.ID, UserID: userID, Role: "member", JoinedAt: now}
 	if err := h.chatRepo.AddMember(ctx, member); err != nil {
 		return err
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateChatMembers(ctx, chat.ID); err != nil {
+			logger.Errorf("general chat invalidate members cache chat=%s: %v", chat.ID, err)
+		}
 	}
 
 	u, _ := h.userRepo.GetByID(ctx, userID)
@@ -271,6 +272,12 @@ func (h *ChatHandler) ensureGeneralChatMember(ctx context.Context, userID string
 			ActorID: "", ActorName: "",
 		},
 	})
+	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, chat.ID)
+	if err != nil {
+		logger.Errorf("general chat join member ids chat=%s: %v", chat.ID, err)
+		memberIDs = []string{userID}
+	}
+	h.invalidateChatCaches(ctx, chat.ID, memberIDs...)
 
 	return nil
 }
@@ -335,6 +342,11 @@ func (h *ChatHandler) SetMuted(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update mute")
 		return
 	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateUserChats(r.Context(), userID); err != nil {
+			logger.Errorf("SetMuted invalidate cache user=%s: %v", userID, err)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"muted": req.Muted})
 }
 
@@ -395,6 +407,12 @@ func (h *ChatHandler) ClearHistory(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	memberIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		logger.Errorf("ClearHistory member ids chat=%s: %v", chatID, err)
+		memberIDs = []string{userID}
+	}
+	h.invalidateChatCaches(r.Context(), chatID, memberIDs...)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -458,6 +476,16 @@ func (h *ChatHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update chat")
 		return
 	}
+	memberIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		logger.Errorf("UpdateChat member ids chat=%s: %v", chatID, err)
+		memberIDs = []string{userID}
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateUserChats(r.Context(), memberIDs...); err != nil {
+			logger.Errorf("UpdateChat invalidate user chats cache chat=%s: %v", chatID, err)
+		}
+	}
 
 	h.hub.BroadcastToChat(r.Context(), chatID, ws.OutgoingMessage{
 		Type: ws.EventChatUpdated,
@@ -513,50 +541,106 @@ func (h *ChatHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	actor, _ := h.userRepo.GetByID(r.Context(), userID)
-	actorName := ""
-	if actor != nil {
+	actorName := userID
+	if actor != nil && actor.Username != "" {
 		actorName = actor.Username
 	}
+	targetIDs := make([]string, 0, len(req.MemberIDs))
+	seen := make(map[string]struct{}, len(req.MemberIDs))
+	for _, rawID := range req.MemberIDs {
+		uid := strings.TrimSpace(rawID)
+		if uid == "" || uid == userID {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		targetIDs = append(targetIDs, uid)
+	}
+	if len(targetIDs) == 0 {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	existingIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check current members")
+		return
+	}
+	existing := make(map[string]struct{}, len(existingIDs))
+	for _, mid := range existingIDs {
+		existing[mid] = struct{}{}
+	}
+
 	now := time.Now().UTC()
-	for _, uid := range req.MemberIDs {
+	addedIDs := make([]string, 0, len(targetIDs))
+	for _, uid := range targetIDs {
+		if _, ok := existing[uid]; ok {
+			continue
+		}
 		member := &model.ChatMember{ChatID: chatID, UserID: uid, Role: "member", JoinedAt: now}
 		if err := h.chatRepo.AddMember(r.Context(), member); err != nil {
 			logger.Errorf("addMember chat=%s user=%s: %v", chatID, uid, err)
-		} else {
-			added, _ := h.userRepo.GetByID(r.Context(), uid)
-			addedName := uid
-			if added != nil {
-				addedName = added.Username
-			}
-			// Системное сообщение в чат: «Иван добавил(а) Марию в группу»
-			systemContent := actorName + " добавил(а) " + addedName + " в группу"
-			sysMsg := &model.Message{
-				ID:          uuid.New().String(),
-				ChatID:      chatID,
-				SenderID:    userID,
-				Content:     systemContent,
-				ContentType: model.ContentTypeSystem,
-				Status:      model.MessageStatusSent,
-				CreatedAt:   now,
-			}
-			if err := h.msgRepo.Create(r.Context(), sysMsg); err != nil {
-				logger.Errorf("addMember system message chat=%s: %v", chatID, err)
-			} else {
-				sysMsg.Sender = &model.UserPublic{ID: userID, Username: actorName}
-				h.hub.BroadcastToChat(r.Context(), chatID, ws.OutgoingMessage{
-					Type:    ws.EventNewMessage,
-					Payload: sysMsg,
-				})
-			}
-			h.hub.BroadcastToChat(r.Context(), chatID, ws.OutgoingMessage{
-				Type: ws.EventMemberAdded,
-				Payload: ws.MemberAddedPayload{
-					ChatID: chatID, UserID: uid, Username: addedName,
-					ActorID: userID, ActorName: actorName,
-				},
-			})
+			continue
+		}
+		addedIDs = append(addedIDs, uid)
+		existing[uid] = struct{}{}
+	}
+	if len(addedIDs) == 0 {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateChatMembers(r.Context(), chatID); err != nil {
+			logger.Errorf("AddMembers invalidate members cache chat=%s: %v", chatID, err)
 		}
 	}
+
+	addedNames := make(map[string]string, len(addedIDs))
+	for _, uid := range addedIDs {
+		addedNames[uid] = uid
+		added, err := h.userRepo.GetByID(r.Context(), uid)
+		if err == nil && added != nil && added.Username != "" {
+			addedNames[uid] = added.Username
+		}
+	}
+
+	for _, uid := range addedIDs {
+		addedName := addedNames[uid]
+		systemContent := actorName + " добавил(а) " + addedName + " в группу"
+		sysMsg := &model.Message{
+			ID:          uuid.New().String(),
+			ChatID:      chatID,
+			SenderID:    userID,
+			Content:     systemContent,
+			ContentType: model.ContentTypeSystem,
+			Status:      model.MessageStatusSent,
+			CreatedAt:   now,
+		}
+		if err := h.msgRepo.Create(r.Context(), sysMsg); err != nil {
+			logger.Errorf("addMember system message chat=%s: %v", chatID, err)
+		} else {
+			sysMsg.Sender = &model.UserPublic{ID: userID, Username: actorName}
+			h.hub.BroadcastToChat(r.Context(), chatID, ws.OutgoingMessage{
+				Type:    ws.EventNewMessage,
+				Payload: sysMsg,
+			})
+		}
+		h.hub.BroadcastToChat(r.Context(), chatID, ws.OutgoingMessage{
+			Type: ws.EventMemberAdded,
+			Payload: ws.MemberAddedPayload{
+				ChatID: chatID, UserID: uid, Username: addedName,
+				ActorID: userID, ActorName: actorName,
+			},
+		})
+	}
+	memberIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		logger.Errorf("AddMembers member ids chat=%s: %v", chatID, err)
+		memberIDs = append([]string{userID}, addedIDs...)
+	}
+	h.invalidateChatCaches(r.Context(), chatID, memberIDs...)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -596,6 +680,11 @@ func (h *ChatHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to remove member")
 		return
 	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateChatMembers(r.Context(), chatID); err != nil {
+			logger.Errorf("RemoveMember invalidate members cache chat=%s: %v", chatID, err)
+		}
+	}
 
 	removed, _ := h.userRepo.GetByID(r.Context(), memberID)
 	removedName := memberID
@@ -631,6 +720,14 @@ func (h *ChatHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 			IsLeave: false, ActorName: actorName,
 		},
 	})
+	memberIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		logger.Errorf("RemoveMember member ids chat=%s: %v", chatID, err)
+		memberIDs = []string{userID, memberID}
+	} else {
+		memberIDs = append(memberIDs, memberID)
+	}
+	h.invalidateChatCaches(r.Context(), chatID, memberIDs...)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -659,6 +756,11 @@ func (h *ChatHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
 	if err := h.chatRepo.RemoveMember(r.Context(), chatID, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to leave chat")
 		return
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateChatMembers(r.Context(), chatID); err != nil {
+			logger.Errorf("LeaveChat invalidate members cache chat=%s: %v", chatID, err)
+		}
 	}
 
 	leaver, _ := h.userRepo.GetByID(r.Context(), userID)
@@ -690,6 +792,14 @@ func (h *ChatHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
 			IsLeave: true, ActorName: "",
 		},
 	})
+	memberIDs, err := h.chatRepo.GetMemberIDs(r.Context(), chatID)
+	if err != nil {
+		logger.Errorf("LeaveChat member ids chat=%s: %v", chatID, err)
+		memberIDs = []string{userID}
+	} else {
+		memberIDs = append(memberIDs, userID)
+	}
+	h.invalidateChatCaches(r.Context(), chatID, memberIDs...)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -727,4 +837,98 @@ func (h *ChatHandler) enrichChat(ctx context.Context, chat *model.Chat, userID s
 		UnreadCount: unread,
 		Muted:       muted,
 	}, nil
+}
+
+func (h *ChatHandler) buildUserChats(ctx context.Context, userID string) ([]model.ChatWithLastMessage, error) {
+	chats, err := h.chatRepo.GetUserChats(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	baseChats := make([]model.Chat, 0, len(chats)+1)
+	for i := range chats {
+		if chats[i].ChatType == model.ChatTypeNotes {
+			continue
+		}
+		baseChats = append(baseChats, chats[i])
+	}
+
+	notesChat, err := h.chatRepo.GetOrCreateNotesChat(ctx, userID)
+	if err != nil {
+		logger.Errorf("GetUserChats get or create notes chat: %v", err)
+	} else {
+		if err := h.userRepo.AddFavorite(ctx, userID, notesChat.ID); err != nil {
+			logger.Errorf("GetUserChats add notes to favorites: %v", err)
+		}
+		baseChats = append(baseChats, *notesChat)
+	}
+
+	return h.enrichChatsBatch(ctx, baseChats, userID), nil
+}
+
+func (h *ChatHandler) enrichChatsBatch(ctx context.Context, chats []model.Chat, userID string) []model.ChatWithLastMessage {
+	result := make([]model.ChatWithLastMessage, 0, len(chats))
+	if len(chats) == 0 {
+		return result
+	}
+
+	chatIDs := make([]string, 0, len(chats))
+	for i := range chats {
+		chatIDs = append(chatIDs, chats[i].ID)
+	}
+
+	membersByChat, err := h.chatRepo.GetMembersByChatIDs(ctx, chatIDs)
+	if err != nil {
+		logger.Errorf("GetUserChats members batch: %v", err)
+		membersByChat = make(map[string][]model.UserPublic)
+	}
+
+	lastByChat, err := h.msgRepo.GetLastMessagesForUserChats(ctx, userID, chatIDs)
+	if err != nil {
+		logger.Errorf("GetUserChats last messages batch: %v", err)
+		lastByChat = make(map[string]*model.Message)
+	}
+
+	unreadByChat, err := h.chatRepo.GetUnreadCountsForUserChats(ctx, userID, chatIDs)
+	if err != nil {
+		logger.Errorf("GetUserChats unread batch: %v", err)
+		unreadByChat = make(map[string]int)
+	}
+
+	mutedByChat, err := h.chatRepo.GetMutedMapForUserChats(ctx, userID, chatIDs)
+	if err != nil {
+		logger.Errorf("GetUserChats muted batch: %v", err)
+		mutedByChat = make(map[string]bool)
+	}
+
+	for i := range chats {
+		chat := chats[i]
+		members := membersByChat[chat.ID]
+		if members == nil {
+			members = make([]model.UserPublic, 0)
+		}
+		result = append(result, model.ChatWithLastMessage{
+			Chat:        chat,
+			LastMessage: lastByChat[chat.ID],
+			Members:     members,
+			UnreadCount: unreadByChat[chat.ID],
+			Muted:       mutedByChat[chat.ID],
+		})
+	}
+	return result
+}
+
+func (h *ChatHandler) invalidateChatCaches(ctx context.Context, chatID string, userIDs ...string) {
+	if h.cache == nil {
+		return
+	}
+	if err := h.cache.InvalidateMessageLists(ctx, chatID); err != nil {
+		logger.Errorf("invalidate message cache chat=%s: %v", chatID, err)
+	}
+	if err := h.cache.InvalidateChatMembers(ctx, chatID); err != nil {
+		logger.Errorf("invalidate members cache chat=%s: %v", chatID, err)
+	}
+	if err := h.cache.InvalidateUserChats(ctx, userIDs...); err != nil {
+		logger.Errorf("invalidate user chats cache chat=%s: %v", chatID, err)
+	}
 }

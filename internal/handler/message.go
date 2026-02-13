@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/messenger/internal/cache"
+	"github.com/messenger/internal/logger"
 	"github.com/messenger/internal/middleware"
+	"github.com/messenger/internal/model"
 	"github.com/messenger/internal/repository"
 )
 
@@ -13,6 +17,7 @@ type MessageHandler struct {
 	chatRepo   *repository.ChatRepository
 	reactRepo  *repository.ReactionRepository
 	pinnedRepo *repository.PinnedRepository
+	cache      *cache.ChatCache
 }
 
 func NewMessageHandler(
@@ -20,8 +25,9 @@ func NewMessageHandler(
 	chatRepo *repository.ChatRepository,
 	reactRepo *repository.ReactionRepository,
 	pinnedRepo *repository.PinnedRepository,
+	cache *cache.ChatCache,
 ) *MessageHandler {
-	return &MessageHandler{msgRepo: msgRepo, chatRepo: chatRepo, reactRepo: reactRepo, pinnedRepo: pinnedRepo}
+	return &MessageHandler{msgRepo: msgRepo, chatRepo: chatRepo, reactRepo: reactRepo, pinnedRepo: pinnedRepo, cache: cache}
 }
 
 func (h *MessageHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
@@ -44,24 +50,29 @@ func (h *MessageHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 
+	if h.cache != nil {
+		var cached []model.Message
+		hit, err := h.cache.MessageList(r.Context(), chatID, userID, limit, offset, &cached)
+		if err != nil {
+			logger.Errorf("messages cache read chat=%s user=%s: %v", chatID, userID, err)
+		}
+		if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
+
 	messages, err := h.msgRepo.GetChatMessages(r.Context(), chatID, userID, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get messages")
 		return
 	}
 
-	// Enrich with reactions and reply-to
-	for i := range messages {
-		reactions, err := h.reactRepo.GetByMessage(r.Context(), messages[i].ID)
-		if err == nil && len(reactions) > 0 {
-			messages[i].Reactions = reactions
-		}
+	h.enrichMessages(r.Context(), messages)
 
-		if messages[i].ReplyToID != nil {
-			replyMsg, err := h.msgRepo.GetByID(r.Context(), *messages[i].ReplyToID)
-			if err == nil {
-				messages[i].ReplyTo = replyMsg
-			}
+	if h.cache != nil {
+		if err := h.cache.SetMessageList(r.Context(), chatID, userID, limit, offset, messages); err != nil {
+			logger.Errorf("messages cache write chat=%s user=%s: %v", chatID, userID, err)
 		}
 	}
 
@@ -85,6 +96,14 @@ func (h *MessageHandler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 	if err := h.msgRepo.MarkAsRead(r.Context(), chatID, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark as read")
 		return
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateMessageLists(r.Context(), chatID); err != nil {
+			logger.Errorf("mark read invalidate messages cache chat=%s: %v", chatID, err)
+		}
+		if err := h.cache.InvalidateUserChats(r.Context(), userID); err != nil {
+			logger.Errorf("mark read invalidate user chats cache user=%s: %v", userID, err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -145,4 +164,55 @@ func (h *MessageHandler) GetReactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, reactions)
+}
+
+func (h *MessageHandler) enrichMessages(ctx context.Context, messages []model.Message) {
+	if len(messages) == 0 {
+		return
+	}
+
+	messageIDs := make([]string, 0, len(messages))
+	replyIDs := make([]string, 0, len(messages))
+	seenReply := make(map[string]struct{}, len(messages))
+	for i := range messages {
+		messageIDs = append(messageIDs, messages[i].ID)
+		if messages[i].ReplyToID == nil {
+			continue
+		}
+		rid := *messages[i].ReplyToID
+		if _, ok := seenReply[rid]; ok {
+			continue
+		}
+		seenReply[rid] = struct{}{}
+		replyIDs = append(replyIDs, rid)
+	}
+
+	if len(messageIDs) > 0 {
+		reactionsByMessage, err := h.reactRepo.GetByMessageIDs(ctx, messageIDs)
+		if err != nil {
+			logger.Errorf("enrichMessages reactions: %v", err)
+		} else {
+			for i := range messages {
+				if reactions := reactionsByMessage[messages[i].ID]; len(reactions) > 0 {
+					messages[i].Reactions = reactions
+				}
+			}
+		}
+	}
+
+	if len(replyIDs) > 0 {
+		repliesByID, err := h.msgRepo.GetByIDs(ctx, replyIDs)
+		if err != nil {
+			logger.Errorf("enrichMessages replies: %v", err)
+			return
+		}
+		for i := range messages {
+			if messages[i].ReplyToID == nil {
+				continue
+			}
+			if reply, ok := repliesByID[*messages[i].ReplyToID]; ok {
+				messages[i].ReplyTo = reply
+			}
+		}
+	}
 }

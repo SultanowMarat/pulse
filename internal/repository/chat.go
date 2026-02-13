@@ -115,6 +115,43 @@ func (r *ChatRepository) GetMembers(ctx context.Context, chatID string) ([]model
 	return users, nil
 }
 
+// GetMembersByChatIDs returns public members grouped by chat ID.
+func (r *ChatRepository) GetMembersByChatIDs(ctx context.Context, chatIDs []string) (map[string][]model.UserPublic, error) {
+	defer logger.DeferLogDuration("chat.GetMembersByChatIDs", time.Now())()
+	out := make(map[string][]model.UserPublic, len(chatIDs))
+	if len(chatIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT cm.chat_id,
+		        u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.company,''), COALESCE(u.position,''),
+		        u.avatar_url, u.is_online, u.last_seen_at, u.disabled_at
+		 FROM chat_members cm
+		 JOIN users u ON u.id = cm.user_id
+		 WHERE cm.chat_id = ANY($1::uuid[])
+		 ORDER BY cm.chat_id, cm.joined_at`,
+		chatIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("chatRepo.GetMembersByChatIDs query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var chatID string
+		var u model.UserPublic
+		if err := rows.Scan(&chatID, &u.ID, &u.Username, &u.Email, &u.Phone, &u.Company, &u.Position, &u.AvatarURL, &u.IsOnline, &u.LastSeenAt, &u.DisabledAt); err != nil {
+			return nil, fmt.Errorf("chatRepo.GetMembersByChatIDs scan: %w", err)
+		}
+		out[chatID] = append(out[chatID], u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chatRepo.GetMembersByChatIDs rows: %w", err)
+	}
+	return out, nil
+}
+
 func (r *ChatRepository) GetMemberIDs(ctx context.Context, chatID string) ([]string, error) {
 	defer logger.DeferLogDuration("chat.GetMemberIDs", time.Now())()
 	rows, err := r.pool.Query(ctx,
@@ -440,4 +477,77 @@ func (r *ChatRepository) GetUnreadCount(ctx context.Context, chatID, userID stri
 		return 0, fmt.Errorf("chatRepo.GetUnreadCount: %w", err)
 	}
 	return count, nil
+}
+
+// GetUnreadCountsForUserChats returns unread counts grouped by chat.
+func (r *ChatRepository) GetUnreadCountsForUserChats(ctx context.Context, userID string, chatIDs []string) (map[string]int, error) {
+	defer logger.DeferLogDuration("chat.GetUnreadCountsForUserChats", time.Now())()
+	out := make(map[string]int, len(chatIDs))
+	if len(chatIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.chat_id, COUNT(*)
+		 FROM messages m
+		 JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = $1
+		 WHERE m.chat_id = ANY($2::uuid[])
+		   AND m.sender_id != $1
+		   AND m.created_at > GREATEST(cm.last_read_at, cm.cleared_at)
+		   AND m.is_deleted = false
+		 GROUP BY m.chat_id`,
+		userID,
+		chatIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("chatRepo.GetUnreadCountsForUserChats query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var chatID string
+		var count int
+		if err := rows.Scan(&chatID, &count); err != nil {
+			return nil, fmt.Errorf("chatRepo.GetUnreadCountsForUserChats scan: %w", err)
+		}
+		out[chatID] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chatRepo.GetUnreadCountsForUserChats rows: %w", err)
+	}
+	return out, nil
+}
+
+// GetMutedMapForUserChats returns muted state per chat for a user.
+func (r *ChatRepository) GetMutedMapForUserChats(ctx context.Context, userID string, chatIDs []string) (map[string]bool, error) {
+	defer logger.DeferLogDuration("chat.GetMutedMapForUserChats", time.Now())()
+	out := make(map[string]bool, len(chatIDs))
+	if len(chatIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT chat_id, muted
+		 FROM chat_members
+		 WHERE user_id = $1 AND chat_id = ANY($2::uuid[])`,
+		userID,
+		chatIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("chatRepo.GetMutedMapForUserChats query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var chatID string
+		var muted bool
+		if err := rows.Scan(&chatID, &muted); err != nil {
+			return nil, fmt.Errorf("chatRepo.GetMutedMapForUserChats scan: %w", err)
+		}
+		out[chatID] = muted
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chatRepo.GetMutedMapForUserChats rows: %w", err)
+	}
+	return out, nil
 }

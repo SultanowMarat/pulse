@@ -71,6 +71,40 @@ func (r *ReactionRepository) GetByMessage(ctx context.Context, messageID string)
 	return reactions, nil
 }
 
+// GetByMessageIDs returns reactions grouped by message ID for a message batch.
+func (r *ReactionRepository) GetByMessageIDs(ctx context.Context, messageIDs []string) (map[string][]model.Reaction, error) {
+	defer logger.DeferLogDuration("reaction.GetByMessageIDs", time.Now())()
+	out := make(map[string][]model.Reaction, len(messageIDs))
+	if len(messageIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT mr.message_id, mr.user_id, mr.emoji, u.username, mr.created_at
+		 FROM message_reactions mr
+		 JOIN users u ON u.id = mr.user_id
+		 WHERE mr.message_id = ANY($1::uuid[])
+		 ORDER BY mr.message_id, mr.created_at`,
+		messageIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("reactionRepo.GetByMessageIDs query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var rc model.Reaction
+		if err := rows.Scan(&rc.MessageID, &rc.UserID, &rc.Emoji, &rc.Username, &rc.CreatedAt); err != nil {
+			return nil, fmt.Errorf("reactionRepo.GetByMessageIDs scan: %w", err)
+		}
+		out[rc.MessageID] = append(out[rc.MessageID], rc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reactionRepo.GetByMessageIDs rows: %w", err)
+	}
+	return out, nil
+}
+
 // GetGroupedByMessage returns aggregated reaction groups for a message.
 func (r *ReactionRepository) GetGroupedByMessage(ctx context.Context, messageID string) ([]model.ReactionGroup, error) {
 	defer logger.DeferLogDuration("reaction.GetGroupedByMessage", time.Now())()

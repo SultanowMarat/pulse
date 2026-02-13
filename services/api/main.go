@@ -21,8 +21,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/messenger/internal/broker"
+	"github.com/messenger/internal/cache"
 	"github.com/messenger/internal/config"
 	"github.com/messenger/internal/handler"
 	"github.com/messenger/internal/logger"
@@ -83,6 +85,31 @@ func main() {
 	resetCancel()
 	logger.Info("database connected, migrations applied")
 
+	var redisCache *redis.Client
+	redisCtx, redisCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	redisOpts, redisErr := redis.ParseURL(cfg.Redis.URL)
+	if redisErr != nil {
+		logger.Errorf("redis cache disabled: parse url: %v", redisErr)
+	} else {
+		candidate := redis.NewClient(redisOpts)
+		if err := candidate.Ping(redisCtx).Err(); err != nil {
+			logger.Errorf("redis cache disabled: ping: %v", err)
+			_ = candidate.Close()
+		} else {
+			redisCache = candidate
+			logger.Info("redis cache enabled")
+		}
+	}
+	redisCancel()
+	if redisCache != nil {
+		defer func() {
+			if err := redisCache.Close(); err != nil {
+				logger.Errorf("redis cache close: %v", err)
+			}
+		}()
+	}
+	chatCache := cache.NewChatCache(redisCache)
+
 	userRepo := repository.NewUserRepository(pool)
 	permRepo := repository.NewPermissionRepository(pool)
 	mailSettingsRepo := repository.NewMailSettingsRepository(pool)
@@ -134,7 +161,7 @@ func main() {
 	}
 
 	hubCtx, hubCancel := context.WithCancel(context.Background())
-	hub := ws.NewHub(chatRepo, msgRepo, userRepo, reactRepo, pinnedRepo, cfg.MaxWSConnections, pushNotifier, fileH)
+	hub := ws.NewHub(chatRepo, msgRepo, userRepo, reactRepo, pinnedRepo, cfg.MaxWSConnections, pushNotifier, fileH, chatCache)
 
 	var hubWg sync.WaitGroup
 	hubWg.Add(1)
@@ -143,8 +170,8 @@ func main() {
 		hub.Run(hubCtx)
 	}()
 
-	chatH := handler.NewChatHandler(chatRepo, userRepo, permRepo, msgRepo, hub, fileH)
-	msgH := handler.NewMessageHandler(msgRepo, chatRepo, reactRepo, pinnedRepo)
+	chatH := handler.NewChatHandler(chatRepo, userRepo, permRepo, msgRepo, hub, fileH, chatCache)
+	msgH := handler.NewMessageHandler(msgRepo, chatRepo, reactRepo, pinnedRepo, chatCache)
 	audioH := handler.NewAudioHandler(cfg)
 	userH := handler.NewUserHandler(userRepo, msgRepo, permRepo, cfg.AuthServiceURL, nil, hub)
 	adminH := handler.NewAdminHandler(permRepo, mailSettingsRepo, fileSettingsRepo, int(cfg.MaxUploadSize/(1024*1024)))

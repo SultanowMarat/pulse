@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/messenger/internal/cache"
 	"github.com/messenger/internal/logger"
 	"github.com/messenger/internal/model"
 	"github.com/messenger/internal/repository"
@@ -35,6 +36,7 @@ type Hub struct {
 	pinnedRepo   *repository.PinnedRepository
 	pushClient   PushNotifier
 	assetCleaner MessageAssetCleaner
+	cache        *cache.ChatCache
 	register     chan *Client
 	unregister   chan *Client
 	done         chan struct{}
@@ -49,6 +51,7 @@ func NewHub(
 	maxConns int,
 	pushClient PushNotifier,
 	assetCleaner MessageAssetCleaner,
+	cache *cache.ChatCache,
 ) *Hub {
 	if maxConns <= 0 {
 		maxConns = 10000
@@ -63,6 +66,7 @@ func NewHub(
 		pinnedRepo:   pinnedRepo,
 		pushClient:   pushClient,
 		assetCleaner: assetCleaner,
+		cache:        cache,
 		register:     make(chan *Client, 64),
 		unregister:   make(chan *Client, 64),
 		done:         make(chan struct{}),
@@ -282,11 +286,12 @@ func (h *Hub) handleNewMessage(ctx context.Context, c *Client, msg IncomingMessa
 		}
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, msg.ChatID)
 	if err != nil {
 		logger.Errorf("ws get members chat=%s: %v", msg.ChatID, err)
 		return
 	}
+	h.invalidateChatCaches(ctx, msg.ChatID, memberIDs...)
 
 	out := OutgoingMessage{Type: EventNewMessage, Payload: m}
 	for _, uid := range memberIDs {
@@ -337,12 +342,12 @@ func (h *Hub) handleEditMessage(ctx context.Context, c *Client, msg IncomingMess
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	original, err := h.msgRepo.GetByID(ctx, msg.MessageID)
+	meta, err := h.msgRepo.GetMetaByID(ctx, msg.MessageID)
 	if err != nil {
 		h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "message not found"})
 		return
 	}
-	if original.SenderID != c.userID {
+	if meta.SenderID != c.userID {
 		h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "can only edit own messages"})
 		return
 	}
@@ -354,14 +359,15 @@ func (h *Hub) handleEditMessage(ctx context.Context, c *Client, msg IncomingMess
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, original.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, meta.ChatID)
 	if err != nil {
 		return
 	}
+	h.invalidateChatCaches(ctx, meta.ChatID, memberIDs...)
 
 	out := OutgoingMessage{Type: EventMessageEdited, Payload: MessageEditedPayload{
 		MessageID: msg.MessageID,
-		ChatID:    original.ChatID,
+		ChatID:    meta.ChatID,
 		Content:   msg.Content,
 		EditedAt:  now,
 	}}
@@ -379,26 +385,26 @@ func (h *Hub) handleDeleteMessage(ctx context.Context, c *Client, msg IncomingMe
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	original, err := h.msgRepo.GetByID(ctx, msg.MessageID)
+	meta, err := h.msgRepo.GetMetaByID(ctx, msg.MessageID)
 	if err != nil {
 		h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "message not found"})
 		return
 	}
-	if original.SenderID != c.userID {
+	if meta.SenderID != c.userID {
 		h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "can only delete own messages"})
 		return
 	}
 
-	if strings.TrimSpace(original.FileURL) != "" {
-		linkedCount, err := h.msgRepo.CountActiveByFileURLExcludingMessage(ctx, original.FileURL, msg.MessageID)
+	if strings.TrimSpace(meta.FileURL) != "" {
+		linkedCount, err := h.msgRepo.CountActiveByFileURLExcludingMessage(ctx, meta.FileURL, msg.MessageID)
 		if err != nil {
-			logger.Errorf("ws count linked files message=%s file_url=%s: %v", msg.MessageID, original.FileURL, err)
+			logger.Errorf("ws count linked files message=%s file_url=%s: %v", msg.MessageID, meta.FileURL, err)
 			h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "failed to delete message"})
 			return
 		}
 		if linkedCount == 0 && h.assetCleaner != nil {
-			if err := h.assetCleaner.DeleteByMessageFileURL(ctx, original.FileURL); err != nil {
-				logger.Errorf("ws delete file asset message=%s file_url=%s: %v", msg.MessageID, original.FileURL, err)
+			if err := h.assetCleaner.DeleteByMessageFileURL(ctx, meta.FileURL); err != nil {
+				logger.Errorf("ws delete file asset message=%s file_url=%s: %v", msg.MessageID, meta.FileURL, err)
 				h.sendToClient(c, OutgoingMessage{Type: EventError, Payload: "failed to delete file"})
 				return
 			}
@@ -411,14 +417,15 @@ func (h *Hub) handleDeleteMessage(ctx context.Context, c *Client, msg IncomingMe
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, original.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, meta.ChatID)
 	if err != nil {
 		return
 	}
+	h.invalidateChatCaches(ctx, meta.ChatID, memberIDs...)
 
 	out := OutgoingMessage{Type: EventMessageDeleted, Payload: MessageDeletedPayload{
 		MessageID: msg.MessageID,
-		ChatID:    original.ChatID,
+		ChatID:    meta.ChatID,
 	}}
 	for _, uid := range memberIDs {
 		h.sendToUser(uid, out)
@@ -433,7 +440,7 @@ func (h *Hub) handleAddReaction(ctx context.Context, c *Client, msg IncomingMess
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	original, err := h.msgRepo.GetByID(ctx, msg.MessageID)
+	meta, err := h.msgRepo.GetMetaByID(ctx, msg.MessageID)
 	if err != nil {
 		return
 	}
@@ -443,14 +450,19 @@ func (h *Hub) handleAddReaction(ctx context.Context, c *Client, msg IncomingMess
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, original.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, meta.ChatID)
 	if err != nil {
 		return
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateMessageLists(ctx, meta.ChatID); err != nil {
+			logger.Errorf("ws add reaction invalidate message cache chat=%s: %v", meta.ChatID, err)
+		}
 	}
 
 	out := OutgoingMessage{Type: EventReactionAdded, Payload: ReactionPayload{
 		MessageID: msg.MessageID,
-		ChatID:    original.ChatID,
+		ChatID:    meta.ChatID,
 		UserID:    c.userID,
 		Emoji:     msg.Emoji,
 	}}
@@ -467,7 +479,7 @@ func (h *Hub) handleRemoveReaction(ctx context.Context, c *Client, msg IncomingM
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	original, err := h.msgRepo.GetByID(ctx, msg.MessageID)
+	meta, err := h.msgRepo.GetMetaByID(ctx, msg.MessageID)
 	if err != nil {
 		return
 	}
@@ -477,14 +489,19 @@ func (h *Hub) handleRemoveReaction(ctx context.Context, c *Client, msg IncomingM
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, original.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, meta.ChatID)
 	if err != nil {
 		return
+	}
+	if h.cache != nil {
+		if err := h.cache.InvalidateMessageLists(ctx, meta.ChatID); err != nil {
+			logger.Errorf("ws remove reaction invalidate message cache chat=%s: %v", meta.ChatID, err)
+		}
 	}
 
 	out := OutgoingMessage{Type: EventReactionRemoved, Payload: ReactionPayload{
 		MessageID: msg.MessageID,
-		ChatID:    original.ChatID,
+		ChatID:    meta.ChatID,
 		UserID:    c.userID,
 		Emoji:     msg.Emoji,
 	}}
@@ -506,7 +523,7 @@ func (h *Hub) handlePinMessage(ctx context.Context, c *Client, msg IncomingMessa
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, msg.ChatID)
 	if err != nil {
 		return
 	}
@@ -534,7 +551,7 @@ func (h *Hub) handleUnpinMessage(ctx context.Context, c *Client, msg IncomingMes
 		return
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, msg.ChatID)
 	if err != nil {
 		return
 	}
@@ -555,7 +572,7 @@ func (h *Hub) handleTyping(ctx context.Context, c *Client, msg IncomingMessage) 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, msg.ChatID)
 	if err != nil {
 		logger.Errorf("ws get members for typing chat=%s: %v", msg.ChatID, err)
 		return
@@ -593,11 +610,12 @@ func (h *Hub) handleMessageRead(ctx context.Context, c *Client, msg IncomingMess
 		logger.Errorf("ws update last_read_at chat=%s user=%s: %v", msg.ChatID, c.userID, err)
 	}
 
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := h.getMemberIDs(ctx, msg.ChatID)
 	if err != nil {
 		logger.Errorf("ws get members for read chat=%s: %v", msg.ChatID, err)
 		return
 	}
+	h.invalidateChatCaches(ctx, msg.ChatID, memberIDs...)
 
 	out := OutgoingMessage{
 		Type: EventMessageRead,
@@ -638,7 +656,7 @@ func (h *Hub) broadcastUserStatus(userID string, online bool) {
 
 	notified := make(map[string]struct{}, 16)
 	for _, chat := range chats {
-		memberIDs, err := h.chatRepo.GetMemberIDs(ctx, chat.ID)
+		memberIDs, err := h.getMemberIDs(ctx, chat.ID)
 		if err != nil {
 			logger.Errorf("ws get members for status broadcast chat=%s: %v", chat.ID, err)
 			continue
@@ -659,13 +677,48 @@ func (h *Hub) broadcastUserStatus(userID string, online bool) {
 // BroadcastToChat sends a message to all members of a chat.
 func (h *Hub) BroadcastToChat(ctx context.Context, chatID string, msg OutgoingMessage) {
 	defer logger.DeferLogDuration("ws.BroadcastToChat", time.Now())()
-	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, chatID)
+	memberIDs, err := h.getMemberIDs(ctx, chatID)
 	if err != nil {
 		logger.Errorf("ws broadcast to chat %s: %v", chatID, err)
 		return
 	}
 	for _, uid := range memberIDs {
 		h.sendToUser(uid, msg)
+	}
+}
+
+func (h *Hub) getMemberIDs(ctx context.Context, chatID string) ([]string, error) {
+	if h.cache != nil {
+		var cached []string
+		hit, err := h.cache.ChatMembers(ctx, chatID, &cached)
+		if err != nil {
+			logger.Errorf("ws members cache read chat=%s: %v", chatID, err)
+		} else if hit {
+			return cached, nil
+		}
+	}
+
+	memberIDs, err := h.chatRepo.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	if h.cache != nil {
+		if err := h.cache.SetChatMembers(ctx, chatID, memberIDs); err != nil {
+			logger.Errorf("ws members cache write chat=%s: %v", chatID, err)
+		}
+	}
+	return memberIDs, nil
+}
+
+func (h *Hub) invalidateChatCaches(ctx context.Context, chatID string, userIDs ...string) {
+	if h.cache == nil {
+		return
+	}
+	if err := h.cache.InvalidateMessageLists(ctx, chatID); err != nil {
+		logger.Errorf("ws invalidate message cache chat=%s: %v", chatID, err)
+	}
+	if err := h.cache.InvalidateUserChats(ctx, userIDs...); err != nil {
+		logger.Errorf("ws invalidate user chats cache chat=%s: %v", chatID, err)
 	}
 }
 
