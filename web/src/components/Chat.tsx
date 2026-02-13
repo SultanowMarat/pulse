@@ -214,6 +214,17 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     el.style.scrollBehavior = prevBehavior;
   }, []);
 
+  const stabilizeBottom = useCallback(() => {
+    if (!stickToBottomRef.current) return;
+    scrollToBottom('auto');
+    requestAnimationFrame(() => {
+      if (stickToBottomRef.current) scrollToBottom('auto');
+    });
+    setTimeout(() => {
+      if (stickToBottomRef.current) scrollToBottom('auto');
+    }, 120);
+  }, [scrollToBottom]);
+
   const mentionCandidates = useMemo(() => {
     const members = chat?.members || [];
     const q = mentionQuery.trim().toLowerCase();
@@ -292,18 +303,54 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     const scrollEl = messagesScrollRef.current;
     if (!scrollEl || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      if (stickToBottomRef.current) scrollToBottom('auto');
+      if (stickToBottomRef.current) stabilizeBottom();
     });
     observer.observe(scrollEl);
     if (composerRef.current) observer.observe(composerRef.current);
     const content = scrollEl.firstElementChild;
     if (content) observer.observe(content);
     return () => observer.disconnect();
-  }, [activeChatId, scrollToBottom]);
+  }, [activeChatId, stabilizeBottom]);
+
+  // Dynamic bottom offset for different platforms: iOS/Android/PWA/Desktop.
+  // Keeps last messages visible above composer regardless of keyboard/safe-area differences.
+  useLayoutEffect(() => {
+    const scrollEl = messagesScrollRef.current;
+    const composerEl = composerRef.current;
+    if (!scrollEl || !composerEl) return;
+
+    const applyComposerHeight = () => {
+      const h = Math.max(56, Math.ceil(composerEl.getBoundingClientRect().height));
+      scrollEl.style.setProperty('--chat-composer-height', `${h}px`);
+    };
+
+    applyComposerHeight();
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => applyComposerHeight());
+      observer.observe(composerEl);
+    }
+
+    const onViewportResize = () => applyComposerHeight();
+    window.addEventListener('resize', onViewportResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
+    }
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', onViewportResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', onViewportResize);
+      }
+      scrollEl.style.removeProperty('--chat-composer-height');
+    };
+  }, [activeChatId]);
 
   useEffect(() => {
     const onViewportResize = () => {
-      if (stickToBottomRef.current) scrollToBottom('auto');
+      if (stickToBottomRef.current) stabilizeBottom();
     };
     window.addEventListener('resize', onViewportResize, { passive: true });
     if (window.visualViewport) {
@@ -315,7 +362,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
         window.visualViewport.removeEventListener('resize', onViewportResize);
       }
     };
-  }, [scrollToBottom]);
+  }, [stabilizeBottom]);
 
   // Сброс локального состояния при смене чата, чтобы не было вспышки старого контента (ответ/перес send/поле ввода)
   useEffect(() => {
@@ -932,7 +979,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
               </div>
             );
           })}
-          <div ref={endRef} />
+          <div ref={endRef} className="chat-scroll-anchor" />
         </div>
       </div>
 
@@ -1018,10 +1065,15 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                     setText(e.target.value);
                     handleTyping();
                     updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                    if (stickToBottomRef.current) requestAnimationFrame(() => scrollToBottom('auto'));
                   }}
                   onClick={(e) => {
                     const t = e.currentTarget;
                     updateMentionState(t.value, t.selectionStart ?? t.value.length);
+                  }}
+                  onFocus={() => {
+                    stickToBottomRef.current = true;
+                    stabilizeBottom();
                   }}
                   onKeyDown={handleKeyDown} placeholder="Написать сообщение..." rows={1}
                   className="flex-1 min-w-0 resize-none px-3 py-1.5 sm:py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[13px] sm:text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-28 sm:max-h-32 overflow-y-auto overflow-x-hidden break-words"

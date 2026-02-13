@@ -140,8 +140,13 @@ html { scroll-behavior: smooth; }
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scroll-padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 4rem));
+  scroll-padding-bottom: calc(var(--chat-composer-height, 88px) + 8px);
   contain: layout style;
+  overflow-anchor: none;
+}
+.chat-scroll-anchor {
+  height: 1px;
+  overflow-anchor: auto;
 }
 /* Контейнеры не должны вызывать горизонтальный скролл */
 .min-w-0 { min-width: 0; }
