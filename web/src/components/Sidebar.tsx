@@ -277,8 +277,8 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
         </div>
       </div>
 
-      {/* List: ВСЕ | ЛИЧНЫЕ | ИЗБРАННЫЕ */}
-      <div className="flex-1 overflow-y-auto dark-scroll mt-0.5 md:mt-1">
+      {/* List: ВСЕ | ЛИЧНЫЕ | ИЗБРАННЫЕ. На вкладке «Избранное» — фон с контурными дудлами. */}
+      <div className={`flex-1 overflow-y-auto dark-scroll mt-0.5 md:mt-1 ${tab === 'favorites' ? 'sidebar-favorites-doodle' : ''}`}>
         {search.trim() ? (
           <>
             {globalLoading && <p className="text-center text-sidebar-text text-[13px] py-8">Поиск...</p>}

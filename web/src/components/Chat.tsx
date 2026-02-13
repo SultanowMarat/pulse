@@ -956,10 +956,10 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Messages ── */}
-      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 pt-2 pb-2 sm:pt-3 sm:pb-3 scroll-smooth touch-pan-y flex flex-col">
-        <div className="min-h-0 flex-1 flex flex-col justify-end gap-0.5 pb-[var(--chat-composer-height,72px)] md:pb-0">
-          {/* Spacer: забирает верхнее пространство, прижимает сообщения к низу (важно на мобильных). */}
-          <div className="min-h-[1px] flex-1 shrink-0" aria-hidden />
+      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 pt-2 pb-2 sm:pt-3 sm:pb-3 scroll-smooth touch-pan-y">
+        <div className="min-h-full flex flex-col justify-end gap-0.5 pb-[var(--chat-composer-height,72px)] md:pb-0">
+          {/* Spacer: прижимает сообщения к низу при малом числе сообщений; при большом — колонка растёт и скролл работает. */}
+          <div className="min-h-0 flex-1 shrink-0" aria-hidden />
           {chatMessages.map((msg, i) => {
             const prev = chatMessages[i - 1];
             const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
