@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAuthStore, useChatStore, useThemeStore } from './store';
 import Auth from './pages/Auth';
 import Messenger from './pages/Messenger';
-import { registerPushIfEnabled, requestNotificationPermissionForPWA } from './push';
+import { registerPushIfEnabled, requestNotificationPermissionForPWA, startPushBackgroundMaintenance } from './push';
 
 export default function App() {
   const { isAuthenticated, init } = useAuthStore();
@@ -35,6 +35,10 @@ export default function App() {
       registerPushIfEnabled().catch(() => {});
     }, 1000);
     return () => clearTimeout(t);
+  }, [isAuthenticated]);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return startPushBackgroundMaintenance();
   }, [isAuthenticated]);
 
   if (!isAuthenticated) return <Auth />;

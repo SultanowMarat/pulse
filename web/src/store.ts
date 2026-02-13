@@ -3,6 +3,7 @@ import * as api from './api';
 import { CACHE_TTL_MS } from './config';
 import { updateFaviconBadge } from './faviconBadge';
 import { getWebSocketBase } from './serverUrl';
+import { unsubscribePushIfEnabled } from './push';
 import type { ChatWithLastMessage, Message, UserPublic, PinnedMessage } from './types';
 
 /** "+" в имени файла часто приходит вместо пробела — нормализуем при получении с сервера. */
@@ -62,6 +63,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    unsubscribePushIfEnabled().catch(() => {});
     localStorage.removeItem(SESSION_ID_KEY);
     localStorage.removeItem(SESSION_SECRET_KEY);
     set({ user: null, isAuthenticated: false });

@@ -1,12 +1,17 @@
 {
+  "id": "/",
   "name": "BuhChat",
   "short_name": "BuhChat",
   "description": "Корпоративный мессенджер BuhChat",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
-  "orientation": "portrait-primary",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "prefer_related_applications": false,
   "background_color": "#0f172a",
   "theme_color": "#3b82f6",
   "categories": ["social", "communication", "productivity"],
