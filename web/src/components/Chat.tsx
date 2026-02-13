@@ -956,8 +956,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Messages ── */}
-      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 py-2 sm:py-3 scroll-smooth touch-pan-y">
-        <div className="min-h-full flex flex-col justify-end gap-0.5">
+      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 pt-2 pb-2 sm:pt-3 sm:pb-3 scroll-smooth touch-pan-y">
+        <div className="min-h-full flex flex-col justify-end gap-0.5 pb-[var(--chat-composer-height,72px)] md:pb-0">
           {chatMessages.map((msg, i) => {
             const prev = chatMessages[i - 1];
             const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
@@ -1053,7 +1053,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       {/* На мобильных: композер максимально внизу (fixed по low visualViewport); при вводе — вплотную к клавиатуре. На десктопе — sticky. */}
       <div
         ref={composerRef}
-        className="shrink-0 z-20 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[var(--composer-padding-bottom,max(2px,env(safe-area-inset-bottom)))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible fixed left-0 right-0 bottom-[var(--composer-bottom)] md:static md:sticky md:bottom-0"
+        className="shrink-0 z-20 px-2.5 sm:px-4 py-1 sm:py-2.5 pb-[var(--composer-padding-bottom,max(2px,env(safe-area-inset-bottom)))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible fixed left-0 right-0 bottom-[var(--composer-bottom)] md:static md:sticky md:bottom-0"
       >
         <div className="relative min-w-0 max-w-full overflow-visible" ref={inputEmojiPickerRef}>
           <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
