@@ -44,6 +44,37 @@ func (r *PermissionRepository) GetByUserID(ctx context.Context, userID string) (
 	return p, nil
 }
 
+// GetByUserIDs возвращает права для набора пользователей (только существующие записи).
+func (r *PermissionRepository) GetByUserIDs(ctx context.Context, userIDs []string) (map[string]model.UserPermissions, error) {
+	defer logger.DeferLogDuration("permission.GetByUserIDs", time.Now())()
+	out := make(map[string]model.UserPermissions, len(userIDs))
+	if len(userIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT user_id, COALESCE(administrator, false), COALESCE(member, true), COALESCE(admin_all_groups, false), updated_at
+		 FROM user_permissions
+		 WHERE user_id = ANY($1)`,
+		userIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("permissionRepo.GetByUserIDs query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var p model.UserPermissions
+		if err := rows.Scan(&p.UserID, &p.Administrator, &p.Member, &p.AssistantAdministrator, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("permissionRepo.GetByUserIDs scan: %w", err)
+		}
+		out[p.UserID] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("permissionRepo.GetByUserIDs rows: %w", err)
+	}
+	return out, nil
+}
+
 // Upsert создаёт или обновляет права пользователя.
 func (r *PermissionRepository) Upsert(ctx context.Context, p *model.UserPermissions) error {
 	defer logger.DeferLogDuration("permission.Upsert", time.Now())()

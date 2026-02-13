@@ -26,7 +26,7 @@ type SectionKey = 'users' | 'links' | 'mail' | 'files' | 'service' | 'backup';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type UserSortKey = 'username' | 'email' | 'phone' | 'status' | 'last_seen_at';
+type UserSortKey = 'username' | 'email' | 'phone' | 'status' | 'last_seen_at' | 'role';
 type SortDir = 'asc' | 'desc';
 
 function fmtLastActivity(u: UserPublic): string {
@@ -48,6 +48,12 @@ function cmpText(a: string, b: string): number {
   return a.localeCompare(b, 'ru', { sensitivity: 'base' });
 }
 
+function roleLabel(role: string): string {
+  if (role === 'administrator') return 'Администратор';
+  if (role === 'assistant_administrator') return 'Помощник администратора';
+  return 'Пользователь';
+}
+
 export default function AdminPanel({ onNotify, standalone = false }: { onNotify: (text: string) => void; standalone?: boolean }) {
   const syncMaxFileSize = useChatStore((s) => s.loadFileSettings);
   const reloadAppStatus = useChatStore((s) => s.loadAppStatus);
@@ -67,7 +73,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
 
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [usersError, setUsersError] = useState('');
-  const [users, setUsers] = useState<UserPublic[]>([]);
+  const [users, setUsers] = useState<api.EmployeePublic[]>([]);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<UserSortKey>('username');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -343,17 +349,19 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
   }, [maxFileSizeMB, onNotify, syncMaxFileSize]);
 
   return (
-    <div className={`h-full w-full flex ${standalone ? 'bg-surface dark:bg-dark-bg' : 'bg-sidebar'}`}>
-      <aside className="w-[250px] shrink-0 border-r border-surface-border dark:border-dark-border p-3 space-y-2">
-        <NavItem active={section === 'users'} icon={<IconUser size={16} />} title="Пользователи" subtitle="Список и управление" onClick={() => setSection('users')} />
-        <NavItem active={section === 'links'} icon={<IconDownload size={16} />} title="Ссылки" subtitle="Установка клиентов" onClick={() => setSection('links')} />
-        <NavItem active={section === 'mail'} icon={<IconMail size={16} />} title="Почта" subtitle="SMTP и тестовое письмо" onClick={() => setSection('mail')} />
-        <NavItem active={section === 'files'} icon={<IconFile size={16} />} title="Файлы" subtitle="Лимит размера" onClick={() => setSection('files')} />
-        <NavItem active={section === 'service'} icon={<IconFile size={16} />} title="Служебные настройки" subtitle="ENV/yaml -> UI" onClick={() => setSection('service')} />
-        <NavItem active={section === 'backup'} icon={<IconFile size={16} />} title="Резервное копирование" subtitle="Backup и restore" onClick={() => setSection('backup')} />
+    <div className={`h-full w-full min-h-0 flex flex-col md:flex-row ${standalone ? 'bg-surface dark:bg-dark-bg' : 'bg-sidebar'}`}>
+      <aside className="w-full md:w-[250px] md:shrink-0 border-b md:border-b-0 md:border-r border-surface-border dark:border-dark-border p-2 sm:p-3">
+        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
+          <NavItem active={section === 'users'} icon={<IconUser size={16} />} title="Пользователи" subtitle="Список и управление" onClick={() => setSection('users')} />
+          <NavItem active={section === 'links'} icon={<IconDownload size={16} />} title="Ссылки" subtitle="Установка клиентов" onClick={() => setSection('links')} />
+          <NavItem active={section === 'mail'} icon={<IconMail size={16} />} title="Почта" subtitle="SMTP и тестовое письмо" onClick={() => setSection('mail')} />
+          <NavItem active={section === 'files'} icon={<IconFile size={16} />} title="Файлы" subtitle="Лимит размера" onClick={() => setSection('files')} />
+          <NavItem active={section === 'service'} icon={<IconFile size={16} />} title="Служебные настройки" subtitle="ENV/yaml -> UI" onClick={() => setSection('service')} />
+          <NavItem active={section === 'backup'} icon={<IconFile size={16} />} title="Резервное копирование" subtitle="Backup и restore" onClick={() => setSection('backup')} />
+        </div>
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-y-auto p-4">
+      <main className="flex-1 min-w-0 min-h-0 overflow-y-auto p-3 sm:p-4">
         {section === 'links' && (
           <div className="max-w-[760px] mx-auto space-y-4">
             {loadingService ? (
@@ -466,7 +474,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
 
         {section === 'users' && (
           <div className="max-w-[980px] mx-auto space-y-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <input
                 type="text"
                 value={search}
@@ -488,7 +496,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
             <div className="rounded-compass border border-sidebar-border/40 overflow-hidden">
               <div
                 ref={scrollRef}
-                className="overflow-y-auto dark-scroll"
+                className="overflow-y-auto overflow-x-auto dark-scroll"
                 style={{ maxHeight: 'calc(100dvh - 260px)' }}
                 onScroll={(e) => {
                   const el = e.currentTarget;
@@ -496,13 +504,14 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
                   if (remain < 220) loadMoreUsers();
                 }}
               >
-                <table className="w-full text-left text-[13px]">
+                <table className="w-full min-w-[920px] text-left text-[13px]">
                   <thead className="bg-sidebar-hover/60 text-sidebar-text sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2">Фото</th>
                     <SortableTH label="Имя" active={sortKey === 'username'} dir={sortDir} onClick={() => toggleSort('username')} />
                     <SortableTH label="Email" active={sortKey === 'email'} dir={sortDir} onClick={() => toggleSort('email')} />
                     <SortableTH label="Телефон" active={sortKey === 'phone'} dir={sortDir} onClick={() => toggleSort('phone')} />
+                    <SortableTH label="Роль" active={sortKey === 'role'} dir={sortDir} onClick={() => toggleSort('role')} />
                     <SortableTH label="Статус" active={sortKey === 'status'} dir={sortDir} onClick={() => toggleSort('status')} />
                     <SortableTH label="Последняя активность" active={sortKey === 'last_seen_at'} dir={sortDir} onClick={() => toggleSort('last_seen_at')} />
                     <th className="px-3 py-2 text-right">Действия</th>
@@ -511,12 +520,12 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
                 <tbody>
                   {loadingUsers && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-6 text-center text-sidebar-text">Загрузка...</td>
+                      <td colSpan={8} className="px-3 py-6 text-center text-sidebar-text">Загрузка...</td>
                     </tr>
                   )}
                   {!loadingUsers && users.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-6 text-center text-sidebar-text">Пользователи не найдены</td>
+                      <td colSpan={8} className="px-3 py-6 text-center text-sidebar-text">Пользователи не найдены</td>
                     </tr>
                   )}
                   {!loadingUsers && users.map((u) => (
@@ -527,6 +536,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
                       <td className="px-3 py-2 text-white">{u.username}</td>
                       <td className="px-3 py-2 text-white/90">{u.email || '—'}</td>
                       <td className="px-3 py-2 text-white/90">{u.phone || '—'}</td>
+                      <td className="px-3 py-2 text-white/90">{roleLabel(u.role)}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex px-2 py-1 rounded-full text-[11px] font-semibold ${u.disabled_at ? 'bg-danger/20 text-danger' : 'bg-green/20 text-green-300'}`}>
                           {u.disabled_at ? 'Отключен' : 'Активен'}
@@ -561,7 +571,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
                   ))}
                   {!loadingUsers && loadingMoreUsers && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-4 text-center text-sidebar-text">Загрузка...</td>
+                      <td colSpan={8} className="px-3 py-4 text-center text-sidebar-text">Загрузка...</td>
                     </tr>
                   )}
                 </tbody>
@@ -856,13 +866,13 @@ function NavItem({ active, icon, title, subtitle, onClick }: { active: boolean; 
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left rounded-compass border px-3 py-2 transition ${active ? 'border-primary/60 bg-primary/10' : 'border-sidebar-border/40 hover:border-sidebar-border/80 bg-sidebar-hover/20'}`}
+      className={`w-full min-w-[170px] md:min-w-0 text-left rounded-compass border px-3 py-2 transition ${active ? 'border-primary/60 bg-primary/10' : 'border-sidebar-border/40 hover:border-sidebar-border/80 bg-sidebar-hover/20'}`}
     >
       <div className="flex items-center gap-2 text-white">
         <span className="text-sidebar-text">{icon}</span>
         <span className="text-[13px] font-semibold">{title}</span>
       </div>
-      <p className="mt-1 text-[11px] text-sidebar-text">{subtitle}</p>
+      <p className="mt-1 text-[11px] text-sidebar-text hidden md:block">{subtitle}</p>
     </button>
   );
 }

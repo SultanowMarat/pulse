@@ -74,7 +74,7 @@ export default function Messenger() {
 
   if (navTab === 'admin' && myAdministrator) {
     return (
-    <div className="h-full min-h-[100dvh] w-full bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
+    <div className="h-full min-h-[var(--app-height)] w-full bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
         {notification && (
           <div
             className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-xl shadow-lg animate-fade max-w-[90vw]"
@@ -107,7 +107,7 @@ export default function Messenger() {
   }
 
   return (
-    <div className="h-full min-h-[100dvh] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
+    <div className="h-full min-h-[var(--app-height)] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
       {/* ── Toast: уведомление (участник добавлен/удалён и т.д.) — ниже статус-бара, не перекрывает контент ── */}
       {notification && (
         <div
@@ -146,7 +146,7 @@ export default function Messenger() {
       </div>
 
       {/* ── Chat Area ── */}
-      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 h-[100svh] md:h-auto overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
+      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 h-[var(--app-height)] md:h-auto overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
         {activeChatId ? (
           <div className="flex flex-1 h-full min-h-0 min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden transition-[opacity] duration-150 ease-out">
@@ -160,9 +160,9 @@ export default function Messenger() {
 
       {/* Group info should open as centered modal */}
       {showInfoModal && activeChat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-padding min-h-[100dvh]">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
           <div className="absolute inset-0 bg-[rgba(4,4,10,0.5)] dark:bg-black/60" onClick={() => setShowInfo(false)} />
-          <div className="relative w-full max-w-[420px] h-[90dvh] max-h-[90dvh] rounded-compass shadow-compass-dialog border border-transparent dark:border-dark-border overflow-hidden bg-white dark:bg-dark-elevated">
+          <div className="relative w-full max-w-[420px] h-[calc(var(--app-height)-1rem)] sm:h-[90dvh] max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] rounded-compass shadow-compass-dialog border border-transparent dark:border-dark-border overflow-hidden bg-white dark:bg-dark-elevated my-2 sm:my-0">
             <ChatInfo chat={activeChat} onClose={() => setShowInfo(false)} />
           </div>
         </div>
@@ -360,7 +360,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding overflow-y-auto">
       <div className="absolute inset-0 bg-[rgba(4,4,10,0.55)] dark:bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] animate-dialog border border-transparent dark:border-dark-border max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col my-2 sm:my-0">
+      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] animate-dialog border border-transparent dark:border-dark-border max-h-[calc(var(--app-height)-1rem)] sm:max-h-[calc(var(--app-height)-2rem)] overflow-hidden flex flex-col my-2 sm:my-0">
         {/* Кнопка закрытия — как на первом слайде, с учётом темы */}
         <button
           onClick={onClose}
@@ -487,9 +487,9 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
 
       {/* Install modal */}
       {showInstall && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 safe-area-padding min-h-[100dvh]">
+        <div className="fixed inset-0 z-[70] flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
           <div className="absolute inset-0 bg-[rgba(4,4,10,0.55)] dark:bg-black/60" onClick={() => setShowInstall(false)} />
-          <div className="relative w-full max-w-[420px] rounded-[16px] shadow-compass-dialog border border-transparent dark:border-dark-border bg-white dark:bg-dark-elevated animate-dialog overflow-hidden">
+          <div className="relative w-full max-w-[420px] rounded-[16px] shadow-compass-dialog border border-transparent dark:border-dark-border bg-white dark:bg-dark-elevated animate-dialog overflow-hidden max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] my-2 sm:my-0">
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <h3 className="text-[17px] font-bold text-txt dark:text-[#e7e9ea] leading-[26px]">Установка</h3>
               <button

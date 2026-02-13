@@ -80,10 +80,10 @@ export function Modal({ open, onClose, title, children, size = 'sm' }: ModalProp
   if (!open) return null;
   const maxW = size === 'md' ? 'max-w-[448px]' : 'max-w-[380px]';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-padding min-h-[100dvh]">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
       <div className="absolute inset-0 bg-[rgba(4,4,10,0.5)] dark:bg-black/60" onClick={onClose} />
-      <div className={`relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog border border-transparent dark:border-dark-border ${maxW} w-full max-h-[90dvh] flex flex-col animate-dialog`}>
-        <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+      <div className={`relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog border border-transparent dark:border-dark-border ${maxW} w-full max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] flex flex-col animate-dialog my-2 sm:my-0`}>
+        <div className="flex items-center justify-between px-4 sm:px-5 pt-3 sm:pt-4 pb-2 shrink-0">
           <h3 className="text-[17px] font-bold text-txt dark:text-[#e7e9ea] leading-[26px] truncate pr-2">{title}</h3>
           <button onClick={onClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-surface-light dark:hover:bg-dark-hover transition-colors text-txt-secondary hover:text-txt dark:text-dark-muted dark:hover:text-[#e7e9ea] -mr-2 shrink-0">
             <svg width={14} height={14} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
@@ -91,7 +91,7 @@ export function Modal({ open, onClose, title, children, size = 'sm' }: ModalProp
             </svg>
           </button>
         </div>
-        <div className="px-5 pb-5 overflow-y-auto min-h-0">{children}</div>
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 overflow-y-auto min-h-0">{children}</div>
       </div>
     </div>
   );

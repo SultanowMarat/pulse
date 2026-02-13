@@ -188,24 +188,26 @@ func (r *UserRepository) ListPage(ctx context.Context, q string, limit, offset i
 	orderBy := func() string {
 		switch strings.ToLower(strings.TrimSpace(sortKey)) {
 		case "email":
-			return fmt.Sprintf("email %s, username ASC, id ASC", dir)
+			return fmt.Sprintf("u.email %s, u.username ASC, u.id ASC", dir)
 		case "phone":
-			return fmt.Sprintf("phone %s, username ASC, id ASC", dir)
+			return fmt.Sprintf("u.phone %s, u.username ASC, u.id ASC", dir)
 		case "last_seen_at":
-			return fmt.Sprintf("last_seen_at %s NULLS LAST, username ASC, id ASC", dir)
+			return fmt.Sprintf("u.last_seen_at %s NULLS LAST, u.username ASC, u.id ASC", dir)
 		case "status":
-			return fmt.Sprintf("CASE WHEN disabled_at IS NULL THEN 0 ELSE 1 END %s, username ASC, id ASC", dir)
+			return fmt.Sprintf("CASE WHEN u.disabled_at IS NULL THEN 0 ELSE 1 END %s, u.username ASC, u.id ASC", dir)
+		case "role":
+			return fmt.Sprintf("CASE WHEN COALESCE(up.administrator,false) THEN 0 WHEN COALESCE(up.admin_all_groups,false) THEN 1 ELSE 2 END %s, u.username ASC, u.id ASC", dir)
 		case "username", "":
 			fallthrough
 		default:
-			return fmt.Sprintf("username %s, id ASC", dir)
+			return fmt.Sprintf("u.username %s, u.id ASC", dir)
 		}
 	}()
 
 	where := ""
 	args := make([]any, 0, 3)
 	if q != "" {
-		where = "WHERE username ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1"
+		where = "WHERE u.username ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1"
 		args = append(args, "%"+q+"%")
 	}
 
@@ -220,7 +222,11 @@ func (r *UserRepository) ListPage(ctx context.Context, q string, limit, offset i
 	argsPage = append(argsPage, limit, offset)
 	limitPos := len(args) + 1
 	offsetPos := len(args) + 2
-	qry := fmt.Sprintf("SELECT %s FROM users %s ORDER BY %s LIMIT $%d OFFSET $%d", userCols, where, orderBy, limitPos, offsetPos)
+	aliasedCols := "u." + strings.ReplaceAll(userCols, ", ", ", u.")
+	qry := fmt.Sprintf(
+		"SELECT %s FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id %s ORDER BY %s LIMIT $%d OFFSET $%d",
+		aliasedCols, where, orderBy, limitPos, offsetPos,
+	)
 	rows, err := r.pool.Query(ctx, qry, argsPage...)
 	if err != nil {
 		return nil, fmt.Errorf("userRepo.ListPage query: %w", err)

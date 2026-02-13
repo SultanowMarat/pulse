@@ -40,9 +40,9 @@ export default function Auth() {
   }, [email, code, verifyCode]);
 
   return (
-    <div className="min-h-screen min-h-[100dvh] min-w-0 max-w-[100vw] w-full flex items-center justify-center bg-surface dark:bg-dark-bg p-4 safe-area-padding overflow-x-clip">
+    <div className="min-h-screen min-h-[var(--app-height)] min-w-0 max-w-[100vw] w-full flex items-center justify-center bg-surface dark:bg-dark-bg p-3 sm:p-4 safe-area-padding overflow-x-clip">
       <div className="w-full max-w-[380px] min-w-0 overflow-x-clip">
-        <div className="text-center mb-8 min-w-0">
+        <div className="text-center mb-6 sm:mb-8 min-w-0">
           <div className="flex items-center justify-center mb-4">
             {logoFailed ? (
               <div className="w-20 h-20 rounded-[20px] bg-primary text-white flex items-center justify-center text-[26px] font-bold shadow-lg shadow-black/20">
@@ -62,7 +62,7 @@ export default function Auth() {
         </div>
 
         <div className="bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog overflow-hidden overflow-x-clip border border-transparent dark:border-dark-border min-w-0">
-          <div className="p-5 space-y-4 min-w-0">
+          <div className="p-4 sm:p-5 space-y-4 min-w-0">
             {error && (
               <div className="bg-danger/8 text-danger text-[13px] rounded-compass px-3.5 py-2.5 font-medium">{error}</div>
             )}

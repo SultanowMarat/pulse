@@ -128,17 +128,32 @@ func (h *UserHandler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 }
 
 type EmployeesPageResponse struct {
-	Users  []model.UserPublic `json:"users"`
-	Total  int                `json:"total"`
-	Limit  int                `json:"limit"`
-	Offset int                `json:"offset"`
+	Users  []EmployeePublic `json:"users"`
+	Total  int              `json:"total"`
+	Limit  int              `json:"limit"`
+	Offset int              `json:"offset"`
+}
+
+type EmployeePublic struct {
+	model.UserPublic
+	Role string `json:"role"`
+}
+
+func roleFromPermissions(p model.UserPermissions) string {
+	if p.Administrator {
+		return "administrator"
+	}
+	if p.AssistantAdministrator {
+		return "assistant_administrator"
+	}
+	return "member"
 }
 
 // GetEmployeesPage возвращает пользователей постранично. Только для администратора.
 // Query params:
 // - q: search by username/email/phone
 // - limit, offset
-// - sort_key: username|email|phone|status|last_seen_at
+// - sort_key: username|email|phone|status|last_seen_at|role
 // - sort_dir: asc|desc
 func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 	currentUserID := middleware.GetUserID(r.Context())
@@ -180,9 +195,27 @@ func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]model.UserPublic, 0, len(res.Users))
+	userIDs := make([]string, 0, len(res.Users))
 	for _, u := range res.Users {
-		out = append(out, u.ToPublic())
+		userIDs = append(userIDs, u.ID)
+	}
+	permMap, err := h.permRepo.GetByUserIDs(r.Context(), userIDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list employees failed")
+		return
+	}
+
+	out := make([]EmployeePublic, 0, len(res.Users))
+	for _, u := range res.Users {
+		p, ok := permMap[u.ID]
+		role := "member"
+		if ok {
+			role = roleFromPermissions(p)
+		}
+		out = append(out, EmployeePublic{
+			UserPublic: u.ToPublic(),
+			Role:       role,
+		})
 	}
 	writeJSON(w, http.StatusOK, EmployeesPageResponse{
 		Users:  out,

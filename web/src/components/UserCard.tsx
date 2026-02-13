@@ -165,9 +165,9 @@ export default function UserCard({ userId, onClose, onOpenChat }: Props) {
   const u = data?.user;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-padding min-h-[100dvh]">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
       <div className="absolute inset-0 bg-[rgba(4,4,10,0.55)] dark:bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] max-h-[90dvh] overflow-y-auto animate-dialog border border-transparent dark:border-dark-border">
+      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] overflow-y-auto animate-dialog border border-transparent dark:border-dark-border my-2 sm:my-0">
         {/* Кнопка: закрыть */}
         <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
           <button onClick={onClose}
@@ -196,7 +196,7 @@ export default function UserCard({ userId, onClose, onOpenChat }: Props) {
             </div>
 
             {/* Action buttons */}
-            <div className="flex justify-center gap-3 px-6 pb-4 -mt-1 relative">
+            <div className="flex justify-center gap-2.5 sm:gap-3 px-4 sm:px-6 pb-4 -mt-1 relative">
               <ActionBtn icon={<IconMessageCircleFilled />} label="написать" onClick={() => { onOpenChat?.(userId); onClose(); }} />
               <div className="relative flex justify-end">
                 <ActionBtn icon={<IconDotsH />} label="ещё" onClick={() => setMenuOpen((v) => !v)} />
@@ -238,7 +238,7 @@ export default function UserCard({ userId, onClose, onOpenChat }: Props) {
 function ActionBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className="flex flex-col items-center gap-1.5 w-[80px] py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] hover:bg-[#e8e8e8] dark:hover:bg-white/10 transition-colors group border border-transparent dark:border-white/10">
+      className="flex flex-col items-center gap-1.5 w-[74px] sm:w-[80px] py-2.5 sm:py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] hover:bg-[#e8e8e8] dark:hover:bg-white/10 transition-colors group border border-transparent dark:border-white/10">
       <span className="text-txt-secondary dark:text-[#8b98a5] group-hover:text-primary transition-colors">{icon}</span>
       <span className="text-[11px] font-medium text-txt-secondary dark:text-[#8b98a5] group-hover:text-txt dark:group-hover:text-[#e7e9ea] transition-colors">{label}</span>
     </button>

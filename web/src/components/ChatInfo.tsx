@@ -410,17 +410,17 @@ function EditGroupModal({
   }, [chat.chat.id, editName, editDesc, newAvatarUrl, onSaved]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 safe-area-padding">
+    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
       <div className="absolute inset-0 bg-black/50 dark:bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog w-full max-w-[400px] border border-transparent dark:border-dark-border animate-dialog">
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      <div className="relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog w-full max-w-[400px] max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] border border-transparent dark:border-dark-border animate-dialog my-2 sm:my-0 overflow-y-auto">
+        <div className="flex items-center justify-between px-4 sm:px-5 pt-3 sm:pt-4 pb-2">
           <h3 className="text-[17px] font-bold text-txt dark:text-[#e7e9ea]">Редактировать группу</h3>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface dark:hover:bg-dark-hover text-txt-secondary dark:text-dark-muted">
             <IconX size={12} />
           </button>
         </div>
-        <div className="px-5 pb-5 space-y-4">
-          <div className="flex gap-4 items-start">
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
+          <div className="flex gap-3 sm:gap-4 items-start">
             <button
               type="button"
               onClick={handleAvatarClick}
@@ -467,7 +467,7 @@ function EditGroupModal({
               rows={3}
             />
           </div>
-          <div className="flex gap-3 pt-1">
+          <div className="flex flex-col sm:flex-row gap-3 pt-1">
             <button type="button" onClick={onClose} className="compass-btn-secondary flex-1 py-2.5">
               Отмена
             </button>

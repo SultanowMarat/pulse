@@ -676,7 +676,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   }, [hasTypingInHeader]);
 
   return (
-    <div className="h-[100svh] md:h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
+    <div className="h-[var(--app-height)] md:h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
       {/* ── Header ── */}
       <div className="shrink-0 sticky top-0 z-20 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border bg-white dark:bg-dark-bg min-w-0 overflow-hidden">
         {onOpenProfile && (
@@ -1047,7 +1047,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
             </div>
           )}
           {!recording && mentionOpen && mentionCandidates.length > 0 && (
-            <div className="absolute bottom-full left-[120px] mb-1 z-20 w-[260px] max-h-[220px] overflow-y-auto rounded-[12px] bg-white dark:bg-dark-elevated border border-surface-border dark:border-dark-border shadow-compass-dialog">
+            <div className="absolute bottom-full left-0 sm:left-[120px] mb-1 z-20 w-[min(260px,calc(100vw-1rem))] max-h-[220px] overflow-y-auto rounded-[12px] bg-white dark:bg-dark-elevated border border-surface-border dark:border-dark-border shadow-compass-dialog">
               {mentionCandidates.map((m, i) => (
                 <button
                   key={m.id}

@@ -737,16 +737,16 @@ function RenameGroupModal({ chat, onClose }: { chat: ChatWithLastMessage; onClos
   }, [name, chat.chat.id, chat.chat.name, onClose, fetchChats]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-padding">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding min-h-[var(--app-height)] overflow-y-auto">
       <div className="absolute inset-0 bg-[rgba(4,4,10,0.55)] dark:bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog w-full max-w-[380px] animate-dialog border border-transparent dark:border-dark-border">
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+      <div className="relative bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog w-full max-w-[380px] animate-dialog border border-transparent dark:border-dark-border max-h-[calc(var(--app-height)-1rem)] sm:max-h-[90dvh] my-2 sm:my-0 overflow-y-auto">
+        <div className="flex items-center justify-between px-4 sm:px-5 pt-3 sm:pt-4 pb-2">
           <h3 className="text-[17px] font-bold text-txt dark:text-[#e7e9ea]">Изменить имя группы</h3>
           <button onClick={onClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-surface-light dark:hover:bg-dark-hover transition-colors text-txt-secondary hover:text-txt dark:text-[#8b98a5] dark:hover:text-[#e7e9ea] -mr-2">
             <IconX size={12} />
           </button>
         </div>
-        <div className="px-5 pb-5 space-y-4">
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
           <div className="flex items-center gap-3 pb-2">
             <Avatar name={name || chat.chat.name} url={chat.chat.avatar_url || undefined} size={48} />
             <div className="min-w-0 flex-1">
@@ -760,7 +760,7 @@ function RenameGroupModal({ chat, onClose }: { chat: ChatWithLastMessage; onClos
               className="compass-input" placeholder="Введите новое название..."
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } }} />
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button onClick={handleSave} disabled={saving || !name.trim()}
               className="compass-btn-primary flex-1 py-2.5 min-h-[44px]">
               {saving ? 'Сохранение...' : 'Сохранить'}

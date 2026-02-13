@@ -335,8 +335,11 @@ export const getPublicFileSettings = () =>
 export const listUsers = () => request<UserPublic[]>('/users');
 /** Список всех сотрудников (только для администратора). */
 export const listEmployees = () => request<UserPublic[]>('/users/employees');
+export interface EmployeePublic extends UserPublic {
+  role: 'member' | 'assistant_administrator' | 'administrator';
+}
 export interface EmployeesPage {
-  users: UserPublic[];
+  users: EmployeePublic[];
   total: number;
   limit: number;
   offset: number;
