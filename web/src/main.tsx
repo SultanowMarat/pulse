@@ -11,13 +11,13 @@ function syncAppHeightVar() {
   const vvTop = vv?.offsetTop ?? 0;
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
-  // iOS/PWA keyboard can report a very small visualViewport height, which creates
-  // an extra gap under sticky composer. When keyboard is open, keep layout height
-  // bound to innerHeight to avoid "double shrink" and big empty space.
-  const keyboardLikelyOpen = innerH - vvH > 120;
-  const nextHeight = keyboardLikelyOpen ? innerH : Math.min(innerH, vvH);
+  // Use the actually visible layout viewport bottom edge.
+  // On iOS with an open keyboard this prevents keeping chat containers at innerHeight,
+  // which otherwise leaves a large blank zone between messages and composer.
+  const visibleBottom = vvTop + vvH;
+  const nextHeight = Math.max(1, Math.round(Math.min(innerH, visibleBottom)));
 
-  document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
+  document.documentElement.style.setProperty('--app-height', `${nextHeight}px`);
 
   // Поле ввода максимально внизу: при открытой клавиатуре — по низу visualViewport (как в Telegram).
   const composerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
