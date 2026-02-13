@@ -181,13 +181,12 @@ function createWindow() {
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  // На macOS закрытие главного окна должно полностью завершать приложение.
+  // Красная кнопка (крестик) — скрыть окно; Cmd+Q или «Завершить» — полный выход.
   if (process.platform === 'darwin') {
     mainWindow.on('close', (e) => {
-      if (isQuitting) return;
+      if (isQuitting || mainWindow.isFullScreen()) return;
       e.preventDefault();
-      isQuitting = true;
-      app.quit();
+      mainWindow.hide();
     });
   }
 }
