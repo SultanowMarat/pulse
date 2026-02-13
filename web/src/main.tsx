@@ -9,6 +9,7 @@ function syncAppHeightVar() {
   const innerH = window.innerHeight;
   const vvH = vv?.height ?? innerH;
   const vvTop = vv?.offsetTop ?? 0;
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
   // iOS/PWA keyboard can report a very small visualViewport height, which creates
   // an extra gap under sticky composer. When keyboard is open, keep layout height
@@ -22,9 +23,10 @@ function syncAppHeightVar() {
   const composerBottom = Math.max(0, Math.round(innerH - vvTop - vvH));
   document.documentElement.style.setProperty('--composer-bottom', `${composerBottom}px`);
 
-  // При открытой клавиатуре убираем нижний отступ у композера, чтобы не было зазора над клавиатурой (PWA/разные модели).
+  // В standalone/PWA и при открытой клавиатуре убираем нижний padding у композера:
+  // это устраняет лишнюю пустую полосу снизу на iOS.
   const keyboardOpen = composerBottom > 60;
-  if (keyboardOpen) {
+  if (keyboardOpen || standalone) {
     document.documentElement.style.setProperty('--composer-padding-bottom', '0');
   } else {
     document.documentElement.style.removeProperty('--composer-padding-bottom');
