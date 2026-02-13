@@ -248,6 +248,7 @@ func (h *Hub) handleNewMessage(ctx context.Context, c *Client, msg IncomingMessa
 		ID:          uuid.New().String(),
 		ChatID:      msg.ChatID,
 		SenderID:    c.userID,
+		ClientMsgID: strings.TrimSpace(msg.ClientMsgID),
 		Content:     msg.Content,
 		ContentType: contentType,
 		FileURL:     msg.FileURL,

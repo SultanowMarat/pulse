@@ -192,12 +192,12 @@ interface ChatState {
   ws: WebSocket | null;
   wsReconnectAttempt: number;
   wsReconnectTimer: ReturnType<typeof setTimeout> | null;
-  pendingMessages: { chatId: string; content: string; opts?: { contentType?: string; fileUrl?: string; fileName?: string; fileSize?: number; replyToId?: string } }[];
+  pendingMessages: PendingMessageEntry[];
 
   fetchChats: () => Promise<void>;
   setActiveChat: (chatId: string | null) => void;
   fetchMessages: (chatId: string) => Promise<void>;
-  sendMessage: (chatId: string, content: string, opts?: { contentType?: string; fileUrl?: string; fileName?: string; fileSize?: number; replyToId?: string }) => void;
+  sendMessage: (chatId: string, content: string, opts?: SendMessageOpts) => void;
   sendTyping: (chatId: string) => void;
   markAsRead: (chatId: string) => void;
   editMessage: (messageId: string, content: string) => void;
@@ -231,10 +231,10 @@ interface ChatState {
   searchMessages: (query: string, chatId?: string) => Promise<Message[]>;
   uploadFile: (file: File) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
   uploadVoice: (file: File) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
-  addOptimisticVoiceMessage: (chatId: string) => string;
+  addOptimisticVoiceMessage: (chatId: string) => { optId: string; clientMsgId: string };
   removeOptimisticMessage: (chatId: string, optId: string) => void;
   updateOptimisticVoiceMessage: (chatId: string, optId: string, opts: { fileUrl: string; fileName?: string; fileSize?: number }) => void;
-  sendMessageWsOnly: (chatId: string, content: string, opts?: { contentType?: string; fileUrl?: string; fileName?: string; fileSize?: number; replyToId?: string }) => void;
+  sendMessageWsOnly: (chatId: string, content: string, opts?: SendMessageOpts) => void;
   leaveChat: (chatId: string) => Promise<void>;
   handleWSMessage: (data: { type: string; payload: any }) => void;
   updateElectronBadge: () => void;
@@ -251,6 +251,22 @@ const typingClearTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
 // Время отключения WS; при переподключении после долгого простоя — полное обновление страницы (перезапуск докера)
 let wsDisconnectedAt: number | null = null;
 const WS_LONG_DISCONNECT_MS = 5000;
+
+type SendMessageOpts = {
+  contentType?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  replyToId?: string;
+  clientMsgId?: string;
+};
+
+type PendingMessageEntry = {
+  chatId: string;
+  content: string;
+  clientMsgId: string;
+  opts?: SendMessageOpts;
+};
 
 function loadFavoritesFromStorage(userId: string): string[] {
   try {
@@ -291,7 +307,7 @@ const initialChatState = {
   ws: null as WebSocket | null,
   wsReconnectAttempt: 0,
   wsReconnectTimer: null as ReturnType<typeof setTimeout> | null,
-  pendingMessages: [] as { chatId: string; content: string; opts?: { contentType?: string; fileUrl?: string; fileName?: string; fileSize?: number; replyToId?: string } }[],
+  pendingMessages: [] as PendingMessageEntry[],
 };
 
 function fileLimitMessage(maxFileSizeMB: number): string {
@@ -312,6 +328,13 @@ function hasUserMention(content: string, username: string): boolean {
     if (v === token) return true;
   }
   return false;
+}
+
+function makeClientMsgID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `cm-${crypto.randomUUID()}`;
+  }
+  return `cm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -412,49 +435,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { ws, replyTo } = get();
     const user = useAuthStore.getState().user;
     const now = new Date().toISOString();
-
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      const optId = `opt-pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const optimistic: Message = {
-        id: optId,
-        chat_id: chatId,
-        sender_id: user?.id ?? '',
-        content,
-        content_type: (opts?.contentType as Message['content_type']) || 'text',
-        file_url: opts?.fileUrl ?? '',
-        file_name: opts?.fileName ?? '',
-        file_size: opts?.fileSize ?? 0,
-        status: 'sent',
-        is_deleted: false,
-        created_at: now,
-        sender: user ? { ...user, is_online: true, last_seen_at: now } : undefined,
-        reply_to_id: opts?.replyToId || replyTo?.id,
-        reply_to: replyTo ?? undefined,
-      };
-      set((s) => {
-        const nextMessages = { ...s.messages, [chatId]: [...(s.messages[chatId] || []), optimistic] };
-        const nextChats = s.chats.map((c) =>
-          c.chat.id === chatId ? { ...c, last_message: optimistic } : c
-        );
-        nextChats.sort((a, b) => {
-          const at = a.last_message?.created_at || a.chat.created_at;
-          const bt = b.last_message?.created_at || b.chat.created_at;
-          return new Date(bt).getTime() - new Date(at).getTime();
-        });
-        return {
-          messages: nextMessages,
-          chats: nextChats,
-          replyTo: null,
-          pendingMessages: [...s.pendingMessages, { chatId, content, opts: { ...opts, replyToId: opts?.replyToId || replyTo?.id } }],
-        };
-      });
-      get().setNotification('Сообщение будет отправлено при появлении связи.');
-      return;
-    }
-
-    const optId = `opt-${Date.now()}`;
+    const clientMsgId = (opts?.clientMsgId || makeClientMsgID()).trim();
+    const replyToID = opts?.replyToId || replyTo?.id;
     const optimistic: Message = {
-      id: optId,
+      id: `opt-${clientMsgId}`,
+      client_msg_id: clientMsgId,
       chat_id: chatId,
       sender_id: user?.id ?? '',
       content,
@@ -466,11 +451,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       is_deleted: false,
       created_at: now,
       sender: user ? { ...user, is_online: true, last_seen_at: now } : undefined,
-      reply_to_id: opts?.replyToId || replyTo?.id,
+      reply_to_id: replyToID,
       reply_to: replyTo ?? undefined,
     };
+    const pendingEntry: PendingMessageEntry = {
+      chatId,
+      content,
+      clientMsgId,
+      opts: { ...opts, replyToId: replyToID, clientMsgId },
+    };
+    const shouldQueue = !ws || ws.readyState !== WebSocket.OPEN;
+
     set((s) => {
-      const nextMessages = { ...s.messages, [chatId]: [...(s.messages[chatId] || []), optimistic] };
+      const nextMessages = {
+        ...s.messages,
+        [chatId]: [...(s.messages[chatId] || []).filter((m) => m.client_msg_id !== clientMsgId), optimistic],
+      };
       const nextChats = s.chats.map((c) =>
         c.chat.id === chatId ? { ...c, last_message: optimistic } : c
       );
@@ -479,27 +475,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const bt = b.last_message?.created_at || b.chat.created_at;
         return new Date(bt).getTime() - new Date(at).getTime();
       });
-      return { messages: nextMessages, chats: nextChats, replyTo: null };
+      return {
+        messages: nextMessages,
+        chats: nextChats,
+        replyTo: null,
+        pendingMessages: shouldQueue ? [...s.pendingMessages, pendingEntry] : s.pendingMessages,
+      };
     });
+
+    if (shouldQueue) {
+      get().setNotification('Сообщение будет отправлено при появлении связи.');
+      return;
+    }
+
     try {
       ws.send(JSON.stringify({
         type: 'new_message',
         chat_id: chatId,
+        client_msg_id: clientMsgId,
         content,
         content_type: opts?.contentType || 'text',
         file_url: opts?.fileUrl || '',
         file_name: opts?.fileName || '',
         file_size: opts?.fileSize || 0,
-        reply_to_id: opts?.replyToId || replyTo?.id || '',
+        reply_to_id: replyToID || '',
       }));
     } catch (e) {
       console.error('ws send error:', e);
       set((s) => ({
-        messages: {
-          ...s.messages,
-          [chatId]: (s.messages[chatId] || []).filter((m) => m.id !== optId),
-        },
+        pendingMessages: [...s.pendingMessages.filter((p) => p.clientMsgId !== clientMsgId), pendingEntry],
       }));
+      get().setNotification('Сообщение будет отправлено при появлении связи.');
     }
   },
 
@@ -540,6 +546,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   editMessage: (messageId, content) => {
     const { ws } = get();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const editedAt = new Date().toISOString();
+    set((s) => {
+      const nextMessages: Record<string, Message[]> = { ...s.messages };
+      for (const [chatId, msgs] of Object.entries(s.messages)) {
+        nextMessages[chatId] = msgs.map((m) =>
+          m.id === messageId ? { ...m, content, edited_at: editedAt, is_deleted: false } : m
+        );
+      }
+      return {
+        messages: nextMessages,
+        chats: s.chats.map((c) => {
+          if (!c.last_message || c.last_message.id !== messageId) return c;
+          return { ...c, last_message: { ...c.last_message, content, edited_at: editedAt, is_deleted: false } };
+        }),
+      };
+    });
     try { ws.send(JSON.stringify({ type: 'message_edited', message_id: messageId, content })); } catch { /* */ }
     set({ editingMessage: null });
   },
@@ -547,18 +569,79 @@ export const useChatStore = create<ChatState>((set, get) => ({
   deleteMessage: (messageId) => {
     const { ws } = get();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const tombstone = (m: Message): Message => ({
+      ...m,
+      is_deleted: true,
+      content: '',
+      content_type: 'text',
+      file_url: '',
+      file_name: '',
+      file_size: 0,
+    });
+    set((s) => {
+      const nextMessages: Record<string, Message[]> = { ...s.messages };
+      const nextPinned: Record<string, PinnedMessage[]> = { ...s.pinnedMessages };
+      for (const [chatId, msgs] of Object.entries(s.messages)) {
+        nextMessages[chatId] = msgs.map((m) => (m.id === messageId ? tombstone(m) : m));
+        const pins = s.pinnedMessages[chatId];
+        if (pins) {
+          nextPinned[chatId] = pins.map((p) => {
+            if (p.message_id !== messageId || !p.message) return p;
+            return { ...p, message: tombstone(p.message) };
+          });
+        }
+      }
+      return {
+        messages: nextMessages,
+        pinnedMessages: nextPinned,
+        chats: s.chats.map((c) => {
+          if (!c.last_message || c.last_message.id !== messageId) return c;
+          return { ...c, last_message: tombstone(c.last_message) };
+        }),
+      };
+    });
     try { ws.send(JSON.stringify({ type: 'message_deleted', message_id: messageId })); } catch { /* */ }
   },
 
   addReaction: (messageId, emoji) => {
     const { ws } = get();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const myId = useAuthStore.getState().user?.id;
+    if (myId) {
+      set((s) => {
+        const nextMessages: Record<string, Message[]> = { ...s.messages };
+        for (const [chatId, msgs] of Object.entries(s.messages)) {
+          nextMessages[chatId] = msgs.map((m) => {
+            if (m.id !== messageId) return m;
+            const reactions = [...(m.reactions || [])];
+            if (!reactions.some((r) => r.user_id === myId && r.emoji === emoji)) {
+              reactions.push({ message_id: messageId, user_id: myId, emoji, created_at: new Date().toISOString() });
+            }
+            return { ...m, reactions };
+          });
+        }
+        return { messages: nextMessages };
+      });
+    }
     try { ws.send(JSON.stringify({ type: 'reaction_added', message_id: messageId, emoji })); } catch { /* */ }
   },
 
   removeReaction: (messageId, emoji) => {
     const { ws } = get();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const myId = useAuthStore.getState().user?.id;
+    if (myId) {
+      set((s) => {
+        const nextMessages: Record<string, Message[]> = { ...s.messages };
+        for (const [chatId, msgs] of Object.entries(s.messages)) {
+          nextMessages[chatId] = msgs.map((m) => {
+            if (m.id !== messageId) return m;
+            return { ...m, reactions: (m.reactions || []).filter((r) => !(r.user_id === myId && r.emoji === emoji)) };
+          });
+        }
+        return { messages: nextMessages };
+      });
+    }
     try { ws.send(JSON.stringify({ type: 'reaction_removed', message_id: messageId, emoji })); } catch { /* */ }
   },
 
@@ -745,11 +828,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { pendingMessages, ws } = get();
     if (pendingMessages.length === 0 || !ws || ws.readyState !== WebSocket.OPEN) return;
     set({ pendingMessages: [] });
-    for (const { chatId, content, opts } of pendingMessages) {
+    for (const { chatId, content, clientMsgId, opts } of pendingMessages) {
       try {
         ws.send(JSON.stringify({
           type: 'new_message',
           chat_id: chatId,
+          client_msg_id: clientMsgId,
           content,
           content_type: opts?.contentType || 'text',
           file_url: opts?.fileUrl || '',
@@ -838,10 +922,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   addOptimisticVoiceMessage: (chatId) => {
     const user = useAuthStore.getState().user;
-    const optId = `opt-voice-${Date.now()}`;
+    const clientMsgId = makeClientMsgID();
+    const optId = `opt-${clientMsgId}`;
     const now = new Date().toISOString();
     const optimistic: Message = {
       id: optId,
+      client_msg_id: clientMsgId,
       chat_id: chatId,
       sender_id: user?.id ?? '',
       content: 'Голосовое сообщение',
@@ -862,7 +948,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [chatId]: [...(s.messages[chatId] || []), optimistic],
       },
     }));
-    return optId;
+    return { optId, clientMsgId };
   },
 
   removeOptimisticMessage: (chatId, optId) => {
@@ -891,20 +977,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
     const { ws, replyTo } = get();
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const clientMsgId = (opts?.clientMsgId || makeClientMsgID()).trim();
+    const replyToID = opts?.replyToId || replyTo?.id;
+    const pendingEntry: PendingMessageEntry = {
+      chatId,
+      content,
+      clientMsgId,
+      opts: { ...opts, clientMsgId, replyToId: replyToID },
+    };
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      set((s) => ({
+        pendingMessages: [...s.pendingMessages.filter((p) => p.clientMsgId !== clientMsgId), pendingEntry],
+      }));
+      get().setNotification('Сообщение будет отправлено при появлении связи.');
+      return;
+    }
     try {
       ws.send(JSON.stringify({
         type: 'new_message',
         chat_id: chatId,
+        client_msg_id: clientMsgId,
         content,
         content_type: opts?.contentType || 'text',
         file_url: opts?.fileUrl || '',
         file_name: opts?.fileName || '',
         file_size: opts?.fileSize || 0,
-        reply_to_id: opts?.replyToId || replyTo?.id || '',
+        reply_to_id: replyToID || '',
       }));
     } catch (e) {
       console.error('ws send error:', e);
+      set((s) => ({
+        pendingMessages: [...s.pendingMessages.filter((p) => p.clientMsgId !== clientMsgId), pendingEntry],
+      }));
+      get().setNotification('Сообщение будет отправлено при появлении связи.');
     }
   },
 
@@ -925,44 +1030,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const msg = normalizeMessageFileName(payload as Message);
         const fromMe = msg.sender_id === myId;
         const me = useAuthStore.getState().user;
+        const clientMsgId = (msg.client_msg_id || '').trim();
         set((s) => {
           const chatMsgs = s.messages[msg.chat_id] || [];
-          let nextList: Message[];
-          if (fromMe) {
-            const alreadyExists = chatMsgs.some((m) => m.id === msg.id);
-            if (alreadyExists) {
-              nextList = chatMsgs;
-            } else {
-              const isVoice = msg.content_type === 'voice';
-              let idx = chatMsgs.findIndex((m) => m.id.startsWith('opt-pending-'));
-              if (idx < 0) {
-                idx = chatMsgs.findIndex((m) => {
+          const existsByID = chatMsgs.some((m) => m.id === msg.id);
+          let nextList = chatMsgs;
+          if (!existsByID) {
+            if (fromMe) {
+              let replaceIndex = -1;
+              if (clientMsgId) {
+                replaceIndex = chatMsgs.findIndex((m) => m.client_msg_id === clientMsgId || m.id === `opt-${clientMsgId}`);
+              }
+              if (replaceIndex < 0) {
+                const isVoice = msg.content_type === 'voice';
+                replaceIndex = chatMsgs.findIndex((m) => {
                   if (!m.id.startsWith('opt-')) return false;
-                  if (isVoice) return m.id.startsWith('opt-voice-');
-                  return !m.id.startsWith('opt-voice-');
+                  if (isVoice && m.content_type !== 'voice') return false;
+                  if (!isVoice && m.content_type === 'voice') return false;
+                  if (msg.file_url && m.file_url && m.file_url !== msg.file_url) return false;
+                  return true;
                 });
               }
-              if (idx >= 0) {
+              if (replaceIndex >= 0) {
                 const out = [...chatMsgs];
-                out[idx] = msg;
+                out[replaceIndex] = msg;
                 nextList = out;
               } else {
                 nextList = [...chatMsgs, msg];
               }
+            } else {
+              nextList = [...chatMsgs, msg];
             }
-          } else {
-            const exists = chatMsgs.some((m) => m.id === msg.id);
-            nextList = exists ? chatMsgs : [...chatMsgs, msg];
-            nextList.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           }
+          nextList = [...nextList].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           const newMessages = { ...s.messages, [msg.chat_id]: nextList };
 
           let newChats = s.chats.map((c) => {
             if (c.chat.id !== msg.chat_id) return c;
+            const unreadInc = !fromMe && s.activeChatId !== msg.chat_id ? 1 : 0;
             return {
               ...c,
               last_message: msg,
-              unread_count: s.activeChatId === msg.chat_id ? c.unread_count : c.unread_count + 1,
+              unread_count: c.unread_count + unreadInc,
             };
           });
 
@@ -999,21 +1108,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
 
           const typingArr = (s.typingUsers[msg.chat_id] || []).filter((id) => id !== msg.sender_id);
+          const nextPending = fromMe && clientMsgId
+            ? s.pendingMessages.filter((p) => p.clientMsgId !== clientMsgId)
+            : s.pendingMessages;
 
           return {
             messages: newMessages,
             chats: newChats,
             typingUsers: { ...s.typingUsers, [msg.chat_id]: typingArr },
+            pendingMessages: nextPending,
           };
         });
 
         get().updateElectronBadge();
-
         const { activeChatId } = get();
-        // В Electron обновление состояния может не перерисовать UI — подтягиваем сообщения с сервера для активного чата
-        if (activeChatId === msg.chat_id) {
-          setTimeout(() => get().fetchMessages(activeChatId), 150);
-        }
         const chat = get().chats.find((c) => c.chat.id === msg.chat_id);
         const chatTitle = chat
           ? (chat.chat.chat_type === 'group' || chat.chat.chat_type === 'notes'
@@ -1054,13 +1162,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const { message_id, chat_id, content, edited_at } = payload;
         set((s) => {
           const msgs = s.messages[chat_id];
-          if (!msgs) return {};
+          if (!msgs) {
+            return {
+              chats: s.chats.map((c) => {
+                if (!c.last_message || c.chat.id !== chat_id || c.last_message.id !== message_id) return c;
+                return { ...c, last_message: { ...c.last_message, content, edited_at, is_deleted: false } };
+              }),
+            };
+          }
           return {
             messages: {
               ...s.messages,
               [chat_id]: msgs.map((m) =>
                 m.id === message_id ? { ...m, content, edited_at, is_deleted: false } : m
               ),
+            },
+            chats: s.chats.map((c) => {
+              if (!c.last_message || c.chat.id !== chat_id || c.last_message.id !== message_id) return c;
+              return { ...c, last_message: { ...c.last_message, content, edited_at, is_deleted: false } };
+            }),
+            pinnedMessages: {
+              ...s.pinnedMessages,
+              [chat_id]: (s.pinnedMessages[chat_id] || []).map((p) => {
+                if (p.message_id !== message_id || !p.message) return p;
+                return { ...p, message: { ...p.message, content, edited_at, is_deleted: false } };
+              }),
             },
           };
         });

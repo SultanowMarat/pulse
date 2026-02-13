@@ -34,6 +34,7 @@ export interface Message {
   id: string;
   chat_id: string;
   sender_id: string;
+  client_msg_id?: string;
   content: string;
   content_type: 'text' | 'image' | 'file' | 'voice' | 'system';
   file_url?: string;

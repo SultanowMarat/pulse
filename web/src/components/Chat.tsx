@@ -605,11 +605,11 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           if (blob.size === 0 || !chatId) return;
           const ext = mime.includes('webm') ? '.webm' : '.ogg';
           const file = new File([blob], `voice-${Date.now()}${ext}`, { type: mime.split(';')[0] });
-          const optId = addOptimisticVoiceMessage(chatId);
+          const { optId, clientMsgId } = addOptimisticVoiceMessage(chatId);
           try {
             const r = await uploadVoice(file);
             updateOptimisticVoiceMessage(chatId, optId, { fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size });
-            sendMessageWsOnly(chatId, 'Голосовое сообщение', { contentType: 'voice', fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size });
+            sendMessageWsOnly(chatId, 'Голосовое сообщение', { contentType: 'voice', fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size, clientMsgId });
           } catch (e: unknown) {
             removeOptimisticMessage(chatId, optId);
             const msg = e instanceof Error ? e.message : 'Не удалось отправить голосовое';

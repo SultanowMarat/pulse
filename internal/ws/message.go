@@ -33,6 +33,8 @@ type IncomingMessage struct {
 	Type    EventType `json:"type"`
 	ChatID  string    `json:"chat_id,omitempty"`
 	Content string    `json:"content,omitempty"`
+	// ClientMsgID is generated on client for reliable optimistic UI reconciliation.
+	ClientMsgID string `json:"client_msg_id,omitempty"`
 
 	// For file messages
 	ContentType model.ContentType `json:"content_type,omitempty"`

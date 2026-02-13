@@ -24,6 +24,7 @@ type Message struct {
 	ID          string        `json:"id"`
 	ChatID      string        `json:"chat_id"`
 	SenderID    string        `json:"sender_id"`
+	ClientMsgID string        `json:"client_msg_id,omitempty"`
 	Content     string        `json:"content"`
 	ContentType ContentType   `json:"content_type"`
 	FileURL     string        `json:"file_url,omitempty"`
