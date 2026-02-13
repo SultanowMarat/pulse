@@ -151,26 +151,17 @@ export default function Messenger() {
         </div>
       )}
 
-      {commandsHidden && (
-        <button
-          type="button"
-          className="hidden md:flex fixed left-3 z-[90] w-12 h-12 rounded-full items-center justify-center bg-[#1f2228] text-[#7f8792] border border-white/5 shadow-[0_10px_24px_rgba(0,0,0,0.35)] hover:text-white hover:bg-[#262a31] transition-colors"
-          style={{ top: 'max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.25rem))' }}
-          title="Показать команды"
-          aria-label="Показать команды"
-          onClick={toggleCommands}
-        >
-          <IconMenu size={20} />
-        </button>
-      )}
-
       {/* ── Nav Rail (PWA: safe areas) ── */}
-      <nav className={`${commandsHidden ? 'hidden' : 'hidden md:flex'} flex-col items-center w-[60px] min-w-[60px] bg-nav shrink-0 py-3 gap-0.5 safe-left`} style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <nav className="hidden md:flex flex-col items-center w-[60px] min-w-[60px] bg-nav shrink-0 py-3 gap-0.5 safe-left" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button
           type="button"
-          className="w-11 h-11 mb-2 rounded-full flex items-center justify-center bg-[#1f2228] text-[#7f8792] border border-white/5 hover:text-white hover:bg-[#262a31] transition-colors"
-          title="Скрыть команды"
-          aria-label="Скрыть команды"
+          className={`w-11 h-11 mb-2 rounded-full flex items-center justify-center border border-white/5 transition-colors ${
+            commandsHidden
+              ? 'bg-[#262a31] text-white'
+              : 'bg-[#1f2228] text-[#7f8792] hover:text-white hover:bg-[#262a31]'
+          }`}
+          title={commandsHidden ? 'Показать список чатов' : 'Скрыть список чатов'}
+          aria-label={commandsHidden ? 'Показать список чатов' : 'Скрыть список чатов'}
           onClick={toggleCommands}
         >
           <IconMenu size={20} />

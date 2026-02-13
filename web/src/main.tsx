@@ -6,8 +6,16 @@ import './index.css';
 function syncAppHeightVar() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const vv = window.visualViewport;
-  const h = vv?.height ?? window.innerHeight;
-  document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
+  const innerH = window.innerHeight;
+  const vvH = vv?.height ?? innerH;
+
+  // iOS/PWA keyboard can report a very small visualViewport height, which creates
+  // an extra gap under sticky composer. When keyboard is open, keep layout height
+  // bound to innerHeight to avoid "double shrink" and big empty space.
+  const keyboardLikelyOpen = innerH - vvH > 120;
+  const nextHeight = keyboardLikelyOpen ? innerH : Math.min(innerH, vvH);
+
+  document.documentElement.style.setProperty('--app-height', `${Math.round(nextHeight)}px`);
 }
 
 if (typeof window !== 'undefined') {

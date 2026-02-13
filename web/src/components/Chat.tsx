@@ -190,6 +190,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const prevChatIdRef = useRef<string | null>(null);
   const didInitialScrollForChatRef = useRef<string | null>(null);
   const stickToBottomRef = useRef(true);
+  const keyboardSettlingUntilRef = useRef(0);
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const BOTTOM_STICK_THRESHOLD = 72;
 
@@ -215,15 +216,19 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   }, []);
 
   const stabilizeBottom = useCallback(() => {
-    if (!stickToBottomRef.current) return;
+    if (!stickToBottomRef.current && Date.now() >= keyboardSettlingUntilRef.current) return;
     scrollToBottom('auto');
     requestAnimationFrame(() => {
-      if (stickToBottomRef.current) scrollToBottom('auto');
+      if (stickToBottomRef.current || Date.now() < keyboardSettlingUntilRef.current) scrollToBottom('auto');
     });
     setTimeout(() => {
-      if (stickToBottomRef.current) scrollToBottom('auto');
+      if (stickToBottomRef.current || Date.now() < keyboardSettlingUntilRef.current) scrollToBottom('auto');
     }, 120);
   }, [scrollToBottom]);
+
+  const isKeyboardSettling = useCallback((): boolean => {
+    return Date.now() < keyboardSettlingUntilRef.current;
+  }, []);
 
   const mentionCandidates = useMemo(() => {
     const members = chat?.members || [];
@@ -271,12 +276,16 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     const el = messagesScrollRef.current;
     if (!el) return;
     const onScroll = () => {
+      if (isKeyboardSettling()) {
+        stickToBottomRef.current = true;
+        return;
+      }
       stickToBottomRef.current = isScrollNearBottom(el);
     };
     onScroll();
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [activeChatId, isScrollNearBottom]);
+  }, [activeChatId, isKeyboardSettling, isScrollNearBottom]);
 
   // Плавный скролл вниз только при новом сообщении в уже открытом чате (не при первой загрузке)
   useEffect(() => {
@@ -303,14 +312,14 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     const scrollEl = messagesScrollRef.current;
     if (!scrollEl || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      if (stickToBottomRef.current) stabilizeBottom();
+      if (stickToBottomRef.current || isKeyboardSettling()) stabilizeBottom();
     });
     observer.observe(scrollEl);
     if (composerRef.current) observer.observe(composerRef.current);
     const content = scrollEl.firstElementChild;
     if (content) observer.observe(content);
     return () => observer.disconnect();
-  }, [activeChatId, stabilizeBottom]);
+  }, [activeChatId, isKeyboardSettling, stabilizeBottom]);
 
   // Dynamic bottom offset for different platforms: iOS/Android/PWA/Desktop.
   // Keeps last messages visible above composer regardless of keyboard/safe-area differences.
@@ -350,7 +359,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
   useEffect(() => {
     const onViewportResize = () => {
-      if (stickToBottomRef.current) stabilizeBottom();
+      if (stickToBottomRef.current || isKeyboardSettling()) stabilizeBottom();
     };
     window.addEventListener('resize', onViewportResize, { passive: true });
     if (window.visualViewport) {
@@ -362,7 +371,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
         window.visualViewport.removeEventListener('resize', onViewportResize);
       }
     };
-  }, [stabilizeBottom]);
+  }, [isKeyboardSettling, stabilizeBottom]);
 
   // Сброс локального состояния при смене чата, чтобы не было вспышки старого контента (ответ/перес send/поле ввода)
   useEffect(() => {
@@ -1073,7 +1082,12 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                   }}
                   onFocus={() => {
                     stickToBottomRef.current = true;
+                    keyboardSettlingUntilRef.current = Date.now() + 2000;
                     stabilizeBottom();
+                  }}
+                  onBlur={() => {
+                    keyboardSettlingUntilRef.current = 0;
+                    stickToBottomRef.current = isScrollNearBottom(messagesScrollRef.current);
                   }}
                   onKeyDown={handleKeyDown} placeholder="Написать сообщение..." rows={1}
                   className="flex-1 min-w-0 resize-none px-3 py-1.5 sm:py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[13px] sm:text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-28 sm:max-h-32 overflow-y-auto overflow-x-hidden break-words"
