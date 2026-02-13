@@ -167,32 +167,37 @@ export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
   ), [globalMessages]);
 
   return (
-    <div className="h-full flex flex-col bg-sidebar min-w-0 overflow-x-hidden safe-bottom">
-      {/* Header: на мобильных/PWA верхний отступ минимальный — safe-area уже на контейнере Messenger */}
-      <div className="px-4 pb-2 shrink-0 pt-2 md:pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <div className="h-full flex flex-col bg-sidebar min-w-0 overflow-x-hidden safe-top safe-bottom">
+      {/* Mobile/PWA header (isolated) */}
+      <div className="md:hidden px-4 pb-2 shrink-0 pt-2">
         <div className="flex items-center justify-between mb-2">
-          {onOpenProfile && (
-            <button type="button" onClick={onOpenProfile} className="md:hidden p-1 rounded-full hover:bg-sidebar-hover transition-colors shrink-0" title="Профиль" aria-label="Профиль">
-              <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={36} />
-            </button>
-          )}
-          <h2 className="text-sidebar-title font-semibold text-white flex-1 min-w-0 truncate text-center md:text-left md:flex-none">Чаты</h2>
-          <div className="flex items-center gap-0.5 shrink-0">
+          <h2 className="text-sidebar-title font-semibold text-white flex-1 min-w-0 truncate text-left">Чаты</h2>
+          <div className="flex items-center gap-1 shrink-0">
             <SidebarBtn tip="Новая группа" onClick={() => setShowNewGroup(true)}><IconUsers size={18} /></SidebarBtn>
+            {onOpenProfile && (
+              <button
+                type="button"
+                onClick={onOpenProfile}
+                className="p-0.5 rounded-full hover:bg-sidebar-hover transition-colors shrink-0"
+                title="Профиль"
+                aria-label="Профиль"
+              >
+                <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={32} />
+              </button>
+            )}
           </div>
         </div>
-        {/* Tabs: ВСЕ | ЛИЧНЫЕ | ИЗБРАННЫЕ — на мобильных компактнее */}
         <div className="flex gap-0.5 mb-1.5 p-0.5 bg-sidebar-hover rounded-compass">
           <button
             type="button"
             onClick={() => setTab('all')}
-            className={`flex-1 min-h-[40px] md:min-h-[44px] py-1.5 md:py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] md:text-[13px] transition-all duration-200 ease-out ${tab === 'all' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            className={`flex-1 min-h-[40px] py-1.5 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] transition-all duration-200 ease-out ${tab === 'all' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
             ВСЕ
           </button>
           <button
             type="button"
             onClick={() => setTab('personal')}
-            className={`flex-1 min-h-[40px] md:min-h-[44px] py-1.5 md:py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] md:text-[13px] transition-all duration-200 ease-out ${tab === 'personal' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            className={`flex-1 min-h-[40px] py-1.5 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] transition-all duration-200 ease-out ${tab === 'personal' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
             <span className="inline-flex items-center justify-center gap-1.5">
               ЛИЧНЫЕ
               {personalUnread > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] leading-[18px]">{personalUnread}</span>}
@@ -201,7 +206,7 @@ export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
           <button
             type="button"
             onClick={() => setTab('favorites')}
-            className={`flex-1 min-h-[40px] md:min-h-[44px] py-1.5 md:py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] md:text-[13px] transition-all duration-200 ease-out ${tab === 'favorites' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            className={`flex-1 min-h-[40px] py-1.5 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[12px] transition-all duration-200 ease-out ${tab === 'favorites' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
             <span className="inline-flex items-center justify-center gap-1.5">
               ИЗБРАННЫЕ
               {favoritesUnread > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] leading-[18px]">{favoritesUnread}</span>}
@@ -211,7 +216,59 @@ export default function Sidebar({ onChatSelect, onOpenProfile }: SidebarProps) {
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-text pointer-events-none"><IconSearch size={18} /></span>
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск"
-            className="w-full pl-10 pr-3 py-2 md:py-2.5 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
+            className="w-full pl-10 pr-3 py-2 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
+        </div>
+      </div>
+
+      {/* Desktop header (isolated) */}
+      <div className="hidden md:block px-4 pb-2 shrink-0 pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sidebar-title font-semibold text-white flex-1 min-w-0 truncate text-left">Чаты</h2>
+          <div className="flex items-center gap-1 shrink-0">
+            <SidebarBtn tip="Новая группа" onClick={() => setShowNewGroup(true)}><IconUsers size={18} /></SidebarBtn>
+            {onOpenProfile && (
+              <button
+                type="button"
+                onClick={onOpenProfile}
+                className="p-0.5 rounded-full hover:bg-sidebar-hover transition-colors shrink-0"
+                title="Профиль"
+                aria-label="Профиль"
+              >
+                <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={32} />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-0.5 mb-1.5 p-0.5 bg-sidebar-hover rounded-compass">
+          <button
+            type="button"
+            onClick={() => setTab('all')}
+            className={`flex-1 min-h-[44px] py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[13px] transition-all duration-200 ease-out ${tab === 'all' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            ВСЕ
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('personal')}
+            className={`flex-1 min-h-[44px] py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[13px] transition-all duration-200 ease-out ${tab === 'personal' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            <span className="inline-flex items-center justify-center gap-1.5">
+              ЛИЧНЫЕ
+              {personalUnread > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] leading-[18px]">{personalUnread}</span>}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('favorites')}
+            className={`flex-1 min-h-[44px] py-2 rounded-[6px] text-sidebar-tab font-medium uppercase tracking-wide text-[13px] transition-all duration-200 ease-out ${tab === 'favorites' ? 'text-primary' : 'text-sidebar-text hover:text-white'}`}>
+            <span className="inline-flex items-center justify-center gap-1.5">
+              ИЗБРАННЫЕ
+              {favoritesUnread > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] leading-[18px]">{favoritesUnread}</span>}
+            </span>
+          </button>
+        </div>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-text pointer-events-none"><IconSearch size={18} /></span>
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск"
+            className="w-full pl-10 pr-3 py-2.5 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
         </div>
       </div>
 

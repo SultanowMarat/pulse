@@ -676,15 +676,15 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   }, [hasTypingInHeader]);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-x-hidden" onClick={() => setCtxMenu(null)}>
+    <div className="h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-x-hidden" onClick={() => setCtxMenu(null)}>
       {/* ── Header ── */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border min-w-0 overflow-hidden">
+      <div className="shrink-0 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border min-w-0 overflow-hidden">
         {onOpenProfile && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onOpenProfile(); }} className="md:hidden p-1 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-colors shrink-0" title="Профиль" aria-label="Профиль">
-            <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={36} />
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpenProfile(); }} className="md:hidden p-0.5 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-colors shrink-0" title="Профиль" aria-label="Профиль">
+            <Avatar name={user?.username ?? ''} url={user?.avatar_url} size={32} />
           </button>
         )}
-        <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="md:hidden p-1.5 rounded-compass hover:bg-surface dark:hover:bg-dark-elevated transition-colors">
+        <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="md:hidden p-1 rounded-compass hover:bg-surface dark:hover:bg-dark-elevated transition-colors">
           <IconBack />
         </button>
         <div onClick={(e) => {
@@ -699,7 +699,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
             onOpenInfo?.();
           }
         }}>
-          <Avatar name={chatName} url={chat.chat.avatar_url || undefined} size={40} online={chatOnline} />
+          <Avatar name={chatName} url={chat.chat.avatar_url || undefined} size={34} online={chatOnline} className="sm:!w-10 sm:!h-10" />
         </div>
         <div className="flex-1 min-w-0" onClick={(e) => {
           if (chat.chat.chat_type === 'personal') {
@@ -713,8 +713,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
             onOpenInfo?.();
           }
         }}>
-          <h2 className="text-[14px] font-semibold text-txt dark:text-[#e7e9ea] truncate leading-tight">{chatName}</h2>
-          <p className="text-[12px] text-txt-secondary dark:text-[#8b98a5] leading-tight mt-0.5 transition-opacity duration-200">
+          <h2 className="text-[13px] sm:text-[14px] font-semibold text-txt dark:text-[#e7e9ea] truncate leading-tight">{chatName}</h2>
+          <p className="text-[11px] sm:text-[12px] text-txt-secondary dark:text-[#8b98a5] leading-tight mt-0.5 transition-opacity duration-200">
             {showTypingInHeader ? (
               <span className="text-primary inline-flex items-center gap-1">{typNames.length > 0 ? typNames.join(', ') : chatName} печатает <TypingDots /></span>
             ) : chatOnline !== undefined ? (
@@ -729,7 +729,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
               e.stopPropagation();
               toggleFavorite(activeChatId);
             }}
-            className="p-2 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-all duration-200 ease-out text-txt-secondary hover:text-txt dark:text-dark-muted dark:hover:text-[#e7e9ea]"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-all duration-200 ease-out text-txt-secondary hover:text-txt dark:text-dark-muted dark:hover:text-[#e7e9ea]"
             title={favoriteChatIds.includes(activeChatId) ? 'Убрать из избранного' : 'В избранное'}
           >
             {favoriteChatIds.includes(activeChatId) ? (
@@ -740,7 +740,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           </button>
         )}
         <button onClick={(e) => { e.stopPropagation(); setInChatSearchOpen(true); }}
-          className="p-2 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-all duration-200 ease-out text-txt-secondary hover:text-txt dark:text-[#8b98a5] dark:hover:text-[#e7e9ea]" title="Поиск в чате">
+          className="p-1.5 sm:p-2 rounded-full hover:bg-surface dark:hover:bg-dark-elevated transition-all duration-200 ease-out text-txt-secondary hover:text-txt dark:text-[#8b98a5] dark:hover:text-[#e7e9ea]" title="Поиск в чате">
           <IconSearch size={20} />
         </button>
       </div>
@@ -837,7 +837,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       )}
 
       {/* ── Messages ── */}
-      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain px-4 py-3 space-y-0.5 scroll-smooth">
+      <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 sm:px-4 py-2 sm:py-3 space-y-0.5 scroll-smooth touch-pan-y">
         {chatMessages.map((msg, i) => {
           const prev = chatMessages[i - 1];
           const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
@@ -847,14 +847,14 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           return (
             <div key={msg.id} id={`msg-${msg.id}`} className={`min-w-0 overflow-hidden ${highlightMsgId === msg.id ? 'animate-msg-highlight rounded-compass' : ''}`}>
               {showDate && (
-                <div className="flex justify-center my-3">
+                <div className="flex justify-center my-2.5 sm:my-3">
                   <span className="px-3 py-1 bg-surface dark:bg-dark-elevated rounded-full text-[11px] text-txt-secondary dark:text-[#8b98a5] font-medium">
                     {new Date(msg.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
                   </span>
                 </div>
               )}
               {msg.content_type === 'system' ? (
-                <div className="flex justify-center my-2">
+                <div className="flex justify-center my-1.5 sm:my-2">
                   <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] bg-surface/90 dark:bg-dark-elevated px-3 py-1.5 rounded-full max-w-[85%] text-center">
                     <SystemMessageContent content={msg.content} members={chat.members} onUserClick={(uid) => setUserCardId(uid)} />
                   </span>
@@ -930,21 +930,21 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
       {/* ── Input ── */}
       {/* NOTE: input popovers (emoji picker, mentions) must not be clipped by parent overflow. */}
-      <div ref={composerRef} className="shrink-0 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible">
+      <div ref={composerRef} className="shrink-0 px-2.5 sm:px-4 py-1.5 sm:py-2.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible">
         <div className="relative min-w-0 max-w-full overflow-visible" ref={inputEmojiPickerRef}>
-          <div className="flex items-end gap-2 min-w-0 max-w-full">
+          <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
             <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
 
             <div className="flex-1 min-w-0">
               {!recording ? (
-                <div className="flex items-end gap-2 min-w-0 max-w-full">
+                <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
                   <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="p-2 rounded-compass text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10 transition-colors disabled:opacity-50"
+                    className="p-1.5 sm:p-2 rounded-compass text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10 transition-colors disabled:opacity-50"
                     title="Прикрепить файл">
                     <IconPaperclip />
                   </button>
                   <button type="button" onClick={() => setShowInputEmojiPicker((s) => !s)} disabled={uploading}
-                    className={`p-2 rounded-compass transition-colors disabled:opacity-50 ${showInputEmojiPicker ? 'text-primary bg-primary/10' : 'text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10'}`}
+                    className={`p-1.5 sm:p-2 rounded-compass transition-colors disabled:opacity-50 ${showInputEmojiPicker ? 'text-primary bg-primary/10' : 'text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10'}`}
                     title="Эмодзи">
                     <IconSmile />
                   </button>
@@ -959,10 +959,10 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                     updateMentionState(t.value, t.selectionStart ?? t.value.length);
                   }}
                   onKeyDown={handleKeyDown} placeholder="Написать сообщение..." rows={1}
-                  className="flex-1 min-w-0 resize-none px-3.5 py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-32 overflow-y-auto overflow-x-hidden break-words"
-                  style={{ minHeight: 38, maxWidth: '100%' }} />
+                  className="flex-1 min-w-0 resize-none px-3 py-1.5 sm:py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[13px] sm:text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-28 sm:max-h-32 overflow-y-auto overflow-x-hidden break-words"
+                  style={{ minHeight: 34, maxWidth: '100%' }} />
                   <button onClick={handleSend} disabled={!displayText.trim()}
-                    className="p-2 rounded-compass bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-30">
+                    className="p-1.5 sm:p-2 rounded-compass bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-30">
                     <IconSend />
                   </button>
                 </div>
@@ -1030,7 +1030,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                   disabled={uploading}
                   className={recording
                     ? 'w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary-hover active:scale-95 transition-all touch-none disabled:opacity-50'
-                    : 'p-2 rounded-compass transition-colors disabled:opacity-50 text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10 touch-none'
+                    : 'p-1.5 sm:p-2 rounded-compass transition-colors disabled:opacity-50 text-txt-secondary hover:text-primary hover:bg-primary/5 dark:text-[#8b98a5] dark:hover:text-primary dark:hover:bg-primary/10 touch-none'
                   }
                   title={recording ? (recordingLocked ? 'Отправить голосовое' : 'Запись...') : 'Удерживайте для записи голосового'}
                   aria-label={recording ? (recordingLocked ? 'Отправить голосовое' : 'Запись') : 'Запись голосового'}

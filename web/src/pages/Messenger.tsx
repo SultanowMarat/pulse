@@ -74,7 +74,7 @@ export default function Messenger() {
 
   if (navTab === 'admin' && myAdministrator) {
     return (
-      <div className="h-full min-h-[100dvh] w-full bg-surface dark:bg-dark-bg safe-top safe-x safe-bottom overflow-x-hidden">
+    <div className="h-full min-h-[100dvh] w-full bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
         {notification && (
           <div
             className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-xl shadow-lg animate-fade max-w-[90vw]"
@@ -107,7 +107,7 @@ export default function Messenger() {
   }
 
   return (
-    <div className="h-full min-h-[100dvh] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-top safe-x safe-bottom overflow-x-hidden">
+    <div className="h-full min-h-[100dvh] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
       {/* ── Toast: уведомление (участник добавлен/удалён и т.д.) — ниже статус-бара, не перекрывает контент ── */}
       {notification && (
         <div
@@ -130,10 +130,6 @@ export default function Messenger() {
 
       {/* ── Nav Rail (PWA: safe areas) ── */}
       <nav className="hidden md:flex flex-col items-center w-[60px] min-w-[60px] bg-nav shrink-0 py-3 gap-0.5 safe-left" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <button title="Профиль" onClick={() => setShowProfile(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-[10px] transition-all duration-200 ease-out text-sidebar-text hover:text-white hover:bg-nav-hover overflow-hidden shrink-0 mb-5">
-          <Avatar name={user?.username || ''} url={user?.avatar_url} size={28} />
-        </button>
         <NavBtn icon={<IconChat />} active={navTab === 'chats'} tip="Чаты"
           onClick={() => { setNavTab('chats'); }} />
         {myAdministrator && (
@@ -230,12 +226,12 @@ function ProfileEditField(
   const { icon, label, error, hint, className, ...rest } = props;
   return (
     <div className="flex flex-col gap-1">
-      <div className={`flex items-start gap-3 px-4 py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] border border-transparent dark:border-white/10 ${error ? 'ring-2 ring-danger/40' : ''}`}>
+      <div className={`flex items-start gap-2.5 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] border border-transparent dark:border-white/10 ${error ? 'ring-2 ring-danger/40' : ''}`}>
         <span className="text-txt-secondary dark:text-[#8b98a5] flex-shrink-0 mt-0.5">{icon}</span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-txt-placeholder dark:text-[#8b98a5] mb-1">{label}</p>
+          <p className="text-[10px] sm:text-[11px] text-txt-placeholder dark:text-[#8b98a5] mb-0.5 sm:mb-1">{label}</p>
           <input
-            className={`w-full bg-transparent text-[14px] font-medium text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] focus:outline-none ${className ?? ''}`}
+            className={`w-full bg-transparent text-[13px] sm:text-[14px] font-medium text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] focus:outline-none ${className ?? ''}`}
             {...rest}
           />
         </div>
@@ -362,9 +358,9 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   }, [installLinks?.install_android_url, installLinks?.install_ios_url, installLinks?.install_macos_url, installLinks?.install_windows_url, openInstall]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-padding">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 safe-area-padding overflow-y-auto">
       <div className="absolute inset-0 bg-[rgba(4,4,10,0.55)] dark:bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] animate-dialog overflow-visible border border-transparent dark:border-dark-border">
+      <div className="relative bg-white dark:bg-dark-elevated rounded-[16px] shadow-compass-dialog w-full max-w-[400px] animate-dialog border border-transparent dark:border-dark-border max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col my-2 sm:my-0">
         {/* Кнопка закрытия — как на первом слайде, с учётом темы */}
         <button
           onClick={onClose}
@@ -374,115 +370,117 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
           <IconX size={14} />
         </button>
 
-        {/* Шапка: аватар и имя — как первый слайд, градиент в светлой теме */}
-        <div className="flex flex-col items-center pt-8 pb-5 bg-gradient-to-b from-primary/5 to-transparent dark:from-transparent dark:to-transparent">
-          <div className="relative cursor-pointer group" onClick={() => fileRef.current?.click()}>
-            <Avatar name={user?.username || ''} url={user?.avatar_url} size={96} online />
-            <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 dark:group-hover:bg-black/40 transition-colors flex items-center justify-center">
-              <span className="text-white text-[11px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">Изменить</span>
-            </div>
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatar} />
-          <h2 className="mt-3 text-[20px] font-bold text-txt dark:text-[#e7e9ea]">{username || user?.username || 'Профиль'}</h2>
-          <p className="text-[12px] text-txt-placeholder dark:text-[#8b98a5] mt-1">Нажмите для смены аватара</p>
-        </div>
-
-        <div className="px-5 pb-5 space-y-4">
-          {/* Тема — кнопки в стиле первого слайда (скруглённые блоки), выбранная = primary */}
-          <div>
-            <label className="block text-[13px] font-medium text-txt-secondary dark:text-[#8b98a5] mb-2">Тема</label>
-            <div className="flex gap-2 flex-wrap">
-              {(['light', 'dark', 'system'] as ThemePreference[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTheme(t)}
-                  className={`flex-1 min-w-0 px-3 py-2.5 rounded-[12px] text-[13px] font-medium transition-colors ${
-                    themePreference === t
-                      ? 'bg-primary text-white'
-                      : 'bg-[#f0f0f0] dark:bg-[#2f3336] text-txt dark:text-[#e7e9ea] hover:bg-[#e8e8e8] dark:hover:bg-white/10 border border-transparent dark:border-white/10'
-                  }`}
-                >
-                  {t === 'light' ? 'Светлая' : t === 'dark' ? 'Тёмная' : 'Как в системе'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Поля в стиле первого слайда: иконка слева, подпись сверху, инпут */}
-          <ProfileEditField
-            icon={<IconUser size={20} />}
-            label="Имя пользователя"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Имя"
-          />
-          <ProfileEditField
-            icon={<IconMail size={20} />}
-            label="Адрес электронной почты"
-            value={email}
-            onChange={handleEmailChange}
-            placeholder="user@example.com"
-            type="email"
-            error={emailErr}
-          />
-          <ProfileEditField
-            icon={<IconPhone size={20} />}
-            label="Номер телефона"
-            value={phone}
-            onChange={handlePhoneChange}
-            placeholder="+7 999 123-45-67"
-            type="tel"
-            error={phoneErr}
-            hint="Международный формат: + и цифры"
-          />
-          <ProfileEditField
-            icon={<IconUser size={20} />}
-            label="Компания (опционально)"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder="Компания"
-          />
-          <ProfileEditField
-            icon={<IconUser size={20} />}
-            label="Должность (опционально)"
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            placeholder="Должность"
-          />
-
-          {/* Установка клиента (отдельное окно) */}
-          <button
-            type="button"
-            onClick={() => setShowInstall(true)}
-            className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] hover:bg-[#e8e8e8] dark:hover:bg-white/10 transition-colors border border-transparent dark:border-white/10"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="text-primary shrink-0"><IconDownload size={20} /></span>
-              <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-txt dark:text-[#e7e9ea] truncate">Установка</div>
-                <div className="text-[11px] text-txt-secondary dark:text-[#8b98a5] truncate">Открыть варианты установки</div>
+        <div className="overflow-y-auto overscroll-contain">
+          {/* Шапка: аватар и имя — как первый слайд, градиент в светлой теме */}
+          <div className="flex flex-col items-center pt-6 sm:pt-8 pb-4 sm:pb-5 bg-gradient-to-b from-primary/5 to-transparent dark:from-transparent dark:to-transparent">
+            <div className="relative cursor-pointer group" onClick={() => fileRef.current?.click()}>
+              <Avatar name={user?.username || ''} url={user?.avatar_url} size={80} online className="sm:!w-24 sm:!h-24" />
+              <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 dark:group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                <span className="text-white text-[11px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">Изменить</span>
               </div>
             </div>
-            <span className="text-txt-secondary dark:text-[#8b98a5] shrink-0"><IconForward /></span>
-          </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatar} />
+            <h2 className="mt-3 text-[18px] sm:text-[20px] font-bold text-txt dark:text-[#e7e9ea] text-center px-10">{username || user?.username || 'Профиль'}</h2>
+            <p className="text-[11px] sm:text-[12px] text-txt-placeholder dark:text-[#8b98a5] mt-1">Нажмите для смены аватара</p>
+          </div>
 
-          {/* Футер: Сохранить (primary), Выйти (красный текст, как на втором слайде) */}
-          <div className="flex gap-3 pt-2">
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-3 sm:space-y-4">
+            {/* Тема — кнопки в стиле первого слайда (скруглённые блоки), выбранная = primary */}
+            <div>
+              <label className="block text-[12px] sm:text-[13px] font-medium text-txt-secondary dark:text-[#8b98a5] mb-2">Тема</label>
+              <div className="flex gap-2 flex-wrap">
+                {(['light', 'dark', 'system'] as ThemePreference[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTheme(t)}
+                    className={`flex-1 min-w-0 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-[12px] text-[12px] sm:text-[13px] font-medium transition-colors ${
+                      themePreference === t
+                        ? 'bg-primary text-white'
+                        : 'bg-[#f0f0f0] dark:bg-[#2f3336] text-txt dark:text-[#e7e9ea] hover:bg-[#e8e8e8] dark:hover:bg-white/10 border border-transparent dark:border-white/10'
+                    }`}
+                  >
+                    {t === 'light' ? 'Светлая' : t === 'dark' ? 'Тёмная' : 'Как в системе'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Поля в стиле первого слайда: иконка слева, подпись сверху, инпут */}
+            <ProfileEditField
+              icon={<IconUser size={20} />}
+              label="Имя пользователя"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Имя"
+            />
+            <ProfileEditField
+              icon={<IconMail size={20} />}
+              label="Адрес электронной почты"
+              value={email}
+              onChange={handleEmailChange}
+              placeholder="user@example.com"
+              type="email"
+              error={emailErr}
+            />
+            <ProfileEditField
+              icon={<IconPhone size={20} />}
+              label="Номер телефона"
+              value={phone}
+              onChange={handlePhoneChange}
+              placeholder="+7 999 123-45-67"
+              type="tel"
+              error={phoneErr}
+              hint="Международный формат: + и цифры"
+            />
+            <ProfileEditField
+              icon={<IconUser size={20} />}
+              label="Компания (опционально)"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Компания"
+            />
+            <ProfileEditField
+              icon={<IconUser size={20} />}
+              label="Должность (опционально)"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              placeholder="Должность"
+            />
+
+            {/* Установка клиента (отдельное окно) */}
             <button
-              onClick={handleSave}
-              disabled={saving || !username.trim() || hasErrors}
-              className="flex-1 py-2.5 rounded-[12px] font-semibold text-[15px] bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              type="button"
+              onClick={() => setShowInstall(true)}
+              className="w-full flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-[12px] bg-[#f0f0f0] dark:bg-[#2f3336] hover:bg-[#e8e8e8] dark:hover:bg-white/10 transition-colors border border-transparent dark:border-white/10"
             >
-              Сохранить
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-primary shrink-0"><IconDownload size={20} /></span>
+                <div className="min-w-0">
+                  <div className="text-[12px] sm:text-[13px] font-semibold text-txt dark:text-[#e7e9ea] truncate">Установка</div>
+                  <div className="text-[10px] sm:text-[11px] text-txt-secondary dark:text-[#8b98a5] truncate">Открыть варианты установки</div>
+                </div>
+              </div>
+              <span className="text-txt-secondary dark:text-[#8b98a5] shrink-0"><IconForward /></span>
             </button>
-            <button
-              onClick={() => { logout(); onClose(); }}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-danger hover:bg-danger/5 dark:hover:bg-danger/10 rounded-[12px] transition-colors"
-            >
-              <IconLogout />
-              <span className="text-[14px] font-semibold">Выйти</span>
-            </button>
+
+            {/* Футер: Сохранить (primary), Выйти (красный текст, как на втором слайде) */}
+            <div className="flex gap-2.5 sm:gap-3 pt-1 sm:pt-2">
+              <button
+                onClick={handleSave}
+                disabled={saving || !username.trim() || hasErrors}
+                className="flex-1 py-2 sm:py-2.5 rounded-[12px] font-semibold text-[14px] sm:text-[15px] bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              >
+                Сохранить
+              </button>
+              <button
+                onClick={() => { logout(); onClose(); }}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 text-danger hover:bg-danger/5 dark:hover:bg-danger/10 rounded-[12px] transition-colors"
+              >
+                <IconLogout />
+                <span className="text-[13px] sm:text-[14px] font-semibold">Выйти</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
