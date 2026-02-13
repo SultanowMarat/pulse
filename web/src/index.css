@@ -143,7 +143,7 @@ html { scroll-behavior: smooth; }
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scroll-padding-bottom: calc(var(--chat-composer-height, 72px) + 4px);
+  scroll-padding-bottom: calc(var(--chat-composer-height, 72px) + var(--composer-bottom, 0px) + 4px);
   contain: layout style;
   overflow-anchor: none;
 }
