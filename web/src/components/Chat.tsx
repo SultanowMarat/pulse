@@ -189,7 +189,30 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const prevLen = useRef(0);
   const prevChatIdRef = useRef<string | null>(null);
   const didInitialScrollForChatRef = useRef<string | null>(null);
+  const stickToBottomRef = useRef(true);
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
+  const BOTTOM_STICK_THRESHOLD = 72;
+
+  const isScrollNearBottom = useCallback((el: HTMLDivElement | null): boolean => {
+    if (!el) return true;
+    return el.scrollHeight - (el.scrollTop + el.clientHeight) <= BOTTOM_STICK_THRESHOLD;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const el = messagesScrollRef.current;
+    if (!el) {
+      endRef.current?.scrollIntoView({ behavior, block: 'end' });
+      return;
+    }
+    if (behavior === 'smooth') {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      return;
+    }
+    const prevBehavior = el.style.scrollBehavior;
+    el.style.scrollBehavior = 'auto';
+    el.scrollTop = el.scrollHeight;
+    el.style.scrollBehavior = prevBehavior;
+  }, []);
 
   const mentionCandidates = useMemo(() => {
     const members = chat?.members || [];
@@ -221,38 +244,78 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     if (!activeChatId || chatMessages.length === 0) return;
     if (didInitialScrollForChatRef.current === activeChatId) return;
     didInitialScrollForChatRef.current = activeChatId;
+    stickToBottomRef.current = true;
     prevLen.current = chatMessages.length;
-    const el = messagesScrollRef.current;
-    if (el) {
-      const prevBehavior = el.style.scrollBehavior;
-      el.style.scrollBehavior = 'auto';
-      el.scrollTop = el.scrollHeight;
-      el.style.scrollBehavior = prevBehavior;
-    } else {
-      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-    }
-  }, [activeChatId, chatMessages.length]);
+    scrollToBottom('auto');
+  }, [activeChatId, chatMessages.length, scrollToBottom]);
 
   // Сброс «начального скролла» при смене чата, чтобы новый чат открылся сразу с конца
   useEffect(() => {
     didInitialScrollForChatRef.current = null;
+    stickToBottomRef.current = true;
   }, [activeChatId]);
+
+  // Telegram-style sticky bottom: если пользователь у нижнего края, новые сообщения удерживают чат внизу.
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stickToBottomRef.current = isScrollNearBottom(el);
+    };
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [activeChatId, isScrollNearBottom]);
 
   // Плавный скролл вниз только при новом сообщении в уже открытом чате (не при первой загрузке)
   useEffect(() => {
-    if (chatMessages.length <= prevLen.current) {
+    const prevCount = prevLen.current;
+    if (chatMessages.length <= prevCount) {
       prevLen.current = chatMessages.length;
       return;
     }
-    const isInitialLoad = prevLen.current === 0;
+    const isInitialLoad = prevCount === 0;
     prevLen.current = chatMessages.length;
-    if (isInitialLoad) return;
+    const last = chatMessages[chatMessages.length - 1];
+    const lastFromMe = !!last && last.sender_id === user?.id;
+    if (!(isInitialLoad || stickToBottomRef.current || lastFromMe)) return;
+
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      });
+      scrollToBottom(isInitialLoad ? 'auto' : 'smooth');
+      // Добиваемся точного прилипания после перерасчёта высот (изображения/аватар/voice metadata).
+      setTimeout(() => scrollToBottom('auto'), 120);
     });
-  }, [chatMessages.length]);
+  }, [chatMessages, scrollToBottom, user?.id]);
+
+  // На изменениях размеров (клавиатура, safe-area, композер) сохраняем прилипание внизу.
+  useLayoutEffect(() => {
+    const scrollEl = messagesScrollRef.current;
+    if (!scrollEl || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollToBottom('auto');
+    });
+    observer.observe(scrollEl);
+    if (composerRef.current) observer.observe(composerRef.current);
+    const content = scrollEl.firstElementChild;
+    if (content) observer.observe(content);
+    return () => observer.disconnect();
+  }, [activeChatId, scrollToBottom]);
+
+  useEffect(() => {
+    const onViewportResize = () => {
+      if (stickToBottomRef.current) scrollToBottom('auto');
+    };
+    window.addEventListener('resize', onViewportResize, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
+    }
+    return () => {
+      window.removeEventListener('resize', onViewportResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', onViewportResize);
+      }
+    };
+  }, [scrollToBottom]);
 
   // Сброс локального состояния при смене чата, чтобы не было вспышки старого контента (ответ/перес send/поле ввода)
   useEffect(() => {
