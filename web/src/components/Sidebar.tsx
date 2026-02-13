@@ -10,7 +10,7 @@ type ChatListTab = 'all' | 'personal' | 'favorites';
 
 export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShowNav }: SidebarProps) {
   const { user } = useAuthStore();
-  const { chats, activeChatId, setActiveChat, typingUsers, onlineUsers, favoriteChatIds, fetchChatsIfStale, fetchFavoritesIfStale, createPersonalChat, createGroupChat, searchUsers, searchMessages, leaveChat, setChatMuted, setNotification } = useChatStore();
+  const { chats, activeChatId, setActiveChat, typingUsers, onlineUsers, favoriteChatIds, fetchChats, fetchChatsIfStale, fetchFavoritesIfStale, createPersonalChat, createGroupChat, searchUsers, searchMessages, leaveChat, setChatMuted, setNotification } = useChatStore();
   const [search, setSearch] = useState('');
   const [globalUsers, setGlobalUsers] = useState<UserPublic[]>([]);
   const [globalMessages, setGlobalMessages] = useState<Message[]>([]);
@@ -31,8 +31,13 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
 
   // При переключении на «ВСЕ» — подгрузить чаты, если кеш пустой/устарел
   useEffect(() => {
-    if (tab === 'all') fetchChatsIfStale();
-  }, [tab, fetchChatsIfStale]);
+    if (tab !== 'all') return;
+    if (chats.length === 0) {
+      fetchChats();
+      return;
+    }
+    fetchChatsIfStale();
+  }, [tab, chats.length, fetchChats, fetchChatsIfStale]);
 
   // При переключении на «ЛИЧНЫЕ» — запрос только если кеш устарел или инвалидирован по WS
   useEffect(() => {

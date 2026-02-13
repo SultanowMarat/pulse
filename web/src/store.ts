@@ -310,7 +310,7 @@ function saveFavoritesToStorage(userId: string, ids: string[]) {
   } catch { /* ignore */ }
 }
 
-let chatsFetchId = 0
+let chatsFetchInFlight: Promise<void> | null = null;
 
 const initialChatState = {
   chats: [] as ChatWithLastMessage[],
@@ -384,48 +384,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   fetchChats: async () => {
-    const requestId = ++chatsFetchId
-    const prev = get();
-    let chats: ChatWithLastMessage[];
-    let favoriteIds: string[] | null = null;
-    try {
-      chats = await api.getChats();
-    } catch {
-      return // при ошибке не трогаем список — остаётся предыдущее состояние
-    }
-    if (requestId !== chatsFetchId) return // устаревший ответ при быстром переключении — не перезаписываем
-    try {
-      const ids = await api.getFavorites();
-      favoriteIds = Array.isArray(ids) ? ids : [];
-    } catch {
-      favoriteIds = null
-    }
-    chats = chats.map((c) => ({
-      ...c,
-      muted: c.muted ?? false,
-      ...(c.last_message ? { last_message: normalizeMessageFileName(c.last_message) } : {}),
-    }));
-    chats.sort((a, b) => {
-      const at = a.last_message?.created_at || a.chat.created_at;
-      const bt = b.last_message?.created_at || b.chat.created_at;
-      return new Date(bt).getTime() - new Date(at).getTime();
-    });
-    const onlineUsers: Record<string, boolean> = {};
-    for (const c of chats) {
-      for (const m of c.members) {
-        onlineUsers[m.id] = m.is_online;
+    if (chatsFetchInFlight) return chatsFetchInFlight;
+    const run = (async () => {
+      const prev = get();
+      let chats: ChatWithLastMessage[];
+      let favoriteIds: string[] | null = null;
+      try {
+        chats = await api.getChats();
+      } catch {
+        return; // при ошибке не трогаем список — остаётся предыдущее состояние
       }
+      try {
+        const ids = await api.getFavorites();
+        favoriteIds = Array.isArray(ids) ? ids : [];
+      } catch {
+        favoriteIds = null;
+      }
+      chats = chats.map((c) => ({
+        ...c,
+        muted: c.muted ?? false,
+        ...(c.last_message ? { last_message: normalizeMessageFileName(c.last_message) } : {}),
+      }));
+      chats.sort((a, b) => {
+        const at = a.last_message?.created_at || a.chat.created_at;
+        const bt = b.last_message?.created_at || b.chat.created_at;
+        return new Date(bt).getTime() - new Date(at).getTime();
+      });
+      const onlineUsers: Record<string, boolean> = {};
+      for (const c of chats) {
+        for (const m of c.members) {
+          onlineUsers[m.id] = m.is_online;
+        }
+      }
+      const next: { chats: ChatWithLastMessage[]; onlineUsers: Record<string, boolean>; favoriteChatIds?: string[] } = { chats, onlineUsers };
+      if (favoriteIds !== null) {
+        next.favoriteChatIds = favoriteIds;
+        const uid = useAuthStore.getState().user?.id;
+        if (uid) saveFavoritesToStorage(uid, favoriteIds);
+      } else {
+        next.favoriteChatIds = prev.favoriteChatIds;
+      }
+      set({ ...next, lastChatsFetchAt: Date.now() });
+      get().updateElectronBadge();
+    })();
+    chatsFetchInFlight = run;
+    try {
+      await run;
+    } finally {
+      if (chatsFetchInFlight === run) chatsFetchInFlight = null;
     }
-    const next: { chats: ChatWithLastMessage[]; onlineUsers: Record<string, boolean>; favoriteChatIds?: string[] } = { chats, onlineUsers };
-    if (favoriteIds !== null) {
-      next.favoriteChatIds = favoriteIds;
-      const uid = useAuthStore.getState().user?.id;
-      if (uid) saveFavoritesToStorage(uid, favoriteIds);
-    } else {
-      next.favoriteChatIds = prev.favoriteChatIds
-    }
-    set({ ...next, lastChatsFetchAt: Date.now() });
-    get().updateElectronBadge();
   },
 
   setActiveChat: (chatId) => {
