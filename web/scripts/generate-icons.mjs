@@ -26,4 +26,10 @@ for (const size of sizes) {
   console.log(`Generated icon-${size}.png`);
 }
 
+// iOS Home Screen often probes these canonical root names.
+await sharp(sourceBuffer).resize(180, 180).png().toFile(path.join(publicDir, 'apple-touch-icon.png'));
+await sharp(sourceBuffer).resize(180, 180).png().toFile(path.join(publicDir, 'apple-touch-icon-precomposed.png'));
+console.log('Generated apple-touch-icon.png');
+console.log('Generated apple-touch-icon-precomposed.png');
+
 console.log(`Icons generated in public/icons/ from ${path.relative(publicDir, sourcePath)}`);
