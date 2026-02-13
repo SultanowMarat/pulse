@@ -8,7 +8,6 @@ import * as api from '../api';
 import ChatInfo from '../components/ChatInfo';
 
 const LEFT_COMMANDS_HIDDEN_KEY = 'left-commands-hidden';
-const ADMIN_ACCESS_KEY_PREFIX = 'compass-admin-access-';
 
 export default function Messenger() {
   const { user, logout, updateProfile, loadUser, profileLoadError } = useAuthStore();
@@ -57,32 +56,11 @@ export default function Messenger() {
 
   useEffect(() => {
     const meId = user?.id;
-    if (!meId) {
-      setMyAdministrator(false);
-      return;
-    }
-    const accessKey = `${ADMIN_ACCESS_KEY_PREFIX}${meId}`;
-    try {
-      if (localStorage.getItem(accessKey) === '1') setMyAdministrator(true);
-    } catch {
-      // ignore localStorage access issues
-    }
-
+    if (!meId) return;
     let cancelled = false;
     api.getUserPermissions(meId)
-      .then((res) => {
-        if (cancelled) return;
-        const canAdmin = !!(res.administrator || res.assistant_administrator);
-        setMyAdministrator(canAdmin);
-        try {
-          localStorage.setItem(accessKey, canAdmin ? '1' : '0');
-        } catch {
-          // ignore localStorage access issues
-        }
-      })
-      .catch(() => {
-        // Keep previous value (including cached one) on transient API errors.
-      });
+      .then((res) => { if (!cancelled) setMyAdministrator(res.administrator); })
+      .catch(() => { if (!cancelled) setMyAdministrator(false); });
     return () => { cancelled = true; };
   }, [user?.id]);
 
