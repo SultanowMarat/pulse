@@ -144,6 +144,13 @@ html { scroll-behavior: smooth; }
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   scroll-padding-bottom: calc(var(--chat-composer-height, 72px) + var(--composer-bottom, 0px) + 4px);
+  background-color: #1f1f24;
+  background-image:
+    linear-gradient(rgba(20, 20, 24, 0.52), rgba(20, 20, 24, 0.52)),
+    url('/backgrounds/chat-math.png');
+  background-size: auto, 680px auto;
+  background-position: center, center top;
+  background-repeat: no-repeat, repeat;
   contain: layout style;
   overflow-anchor: none;
 }
