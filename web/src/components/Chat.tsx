@@ -958,6 +958,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       {/* ── Messages ── */}
       <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 pt-2 pb-2 sm:pt-3 sm:pb-3 scroll-smooth touch-pan-y">
         <div className="min-h-full flex flex-col justify-end gap-0.5 pb-[var(--chat-composer-height,72px)] md:pb-0">
+          {/* Spacer: прижимает сообщения к низу, когда их мало (вместо прилипания к верху). */}
+          <div className="min-h-0 flex-1 shrink-0" aria-hidden />
           {chatMessages.map((msg, i) => {
             const prev = chatMessages[i - 1];
             const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();

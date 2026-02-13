@@ -764,7 +764,7 @@ export default function AdminPanel({ onNotify, standalone = false }: { onNotify:
             <section className="rounded-compass border border-sidebar-border/40 p-3 bg-sidebar-hover/40 space-y-3">
               <h3 className="text-[14px] font-semibold text-white">Восстановить из резервной копии</h3>
               <p className="text-[12px] text-sidebar-text">
-                Восстановление заменит базу данных и файлы. Рекомендуется выполнять на новом сервере или в режиме обслуживания.
+                Восстановление заменит базу данных и файлы (uploads, audio, ключи push). После восстановления рекомендуется перезапустить контейнер API: <code className="bg-sidebar-border/50 px-1 rounded">docker compose restart api</code>.
               </p>
               <input
                 type="file"

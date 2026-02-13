@@ -234,7 +234,10 @@ func (h *BackupHandler) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "restore failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Рекомендуется перезапустить контейнер API (docker compose restart api), чтобы при необходимости применились миграции и сессии синхронизировались с восстановленной БД.",
+	})
 }
 
 func (h *BackupHandler) restoreFromZip(ctx context.Context, zipPath string) error {

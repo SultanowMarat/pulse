@@ -328,7 +328,7 @@ export const downloadAdminBackup = async (): Promise<Blob> => {
 export const restoreAdminBackup = (file: File) => {
   const fd = new FormData();
   fd.append('file', file);
-  return request<{ status: string }>('/admin/restore', { method: 'POST', body: fd });
+  return request<{ status: string; message?: string }>('/admin/restore', { method: 'POST', body: fd });
 };
 export const getPublicFileSettings = () =>
   requestPublic<FileSettings>('/config/file-settings');
