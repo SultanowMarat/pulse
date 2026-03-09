@@ -4,8 +4,6 @@
 
 :root {
   --app-height: 100svh;
-  --composer-bottom: 0px;
-  /* Нижний отступ композера: минимум 2px для touch, иначе safe-area (PWA/вырез/домашняя полоска). При открытой клавиатуре переопределяется в main.tsx на 0. */
   --composer-padding-bottom: max(2px, env(safe-area-inset-bottom));
 }
 
@@ -143,15 +141,8 @@ html { scroll-behavior: smooth; }
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scroll-padding-bottom: calc(var(--chat-composer-height, 72px) + var(--composer-bottom, 0px) + 4px);
-  background-color: #1f1f24;
-  background-image:
-    linear-gradient(rgba(20, 20, 24, 0.52), rgba(20, 20, 24, 0.52)),
-    url('/backgrounds/chat-math.png');
-  background-size: auto, 680px auto;
-  background-position: center, center top;
-  background-repeat: no-repeat, repeat;
-  contain: layout style;
+  scroll-padding-bottom: 8px;
+  background: transparent;
   overflow-anchor: none;
 }
 .chat-scroll-anchor {
@@ -164,10 +155,7 @@ html { scroll-behavior: smooth; }
 
 /* Фон «Избранное»: белые контурные дудлы на тёмном (как в референсе) */
 .sidebar-favorites-doodle {
-  background-color: var(--sidebar-bg, #1a1a1a);
-  background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.1)' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M30 25c0-5 4-8 8-8s8 3 8 8-3 10-8 14-8-9-8-14z'/%3E%3Ccircle cx='70' cy='30' r='9'/%3E%3Cpath d='M95 45l5-5 5 5 5-5 2 2-7 7-7-7z'/%3E%3Cpath d='M130 35l2 2-2 2-2-2z'/%3E%3Cpath d='M25 75c2 0 4 2 4 4s-2 4-4 4-4-2-4-4 2-4 4-4z'/%3E%3Cpath d='M55 70c3-2 6 0 6 4s-3 6-6 6-6-3-6-6 3-4 6-4z'/%3E%3Ccircle cx='100' cy='90' r='8'/%3E%3Cpath d='M135 80l3 3-3 3-3-3z'/%3E%3Cpath d='M40 115c0-4 3-7 7-7s7 3 7 7-3 8-7 12-7-8-7-12z'/%3E%3Cpath d='M85 120l2 2 2-2 2 2'/%3E%3Ccircle cx='125' cy='130' r='6'/%3E%3Cpath d='M160 50c0-4 3-7 7-7s7 3 7 7-3 6-7 9-7-5-7-9z'/%3E%3Ccircle cx='50' cy='150' r='7'/%3E%3Cpath d='M90 155l3 3-3 3-3-3z'/%3E%3Cpath d='M155 110l2 2-2 2-2-2z'/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 200px 200px;
+  background: transparent;
 }
 
 /* Typing dots */
@@ -378,3 +366,4 @@ html { scroll-behavior: smooth; }
   @apply compass-btn bg-surface-light text-txt-placeholder hover:bg-[#E0E0E0] px-4 py-2.5
     dark:bg-dark-hover dark:text-dark-muted dark:hover:bg-dark-border;
 }
+

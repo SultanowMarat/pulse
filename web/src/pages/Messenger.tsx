@@ -118,7 +118,7 @@ export default function Messenger() {
 
   if (navTab === 'admin' && myAdministrator) {
     return (
-    <div className="h-full min-h-[var(--app-height)] w-full bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
+    <div className="h-[var(--app-height)] w-full bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
         {notification && (
           <div
             className="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-3 bg-txt text-white text-[13px] font-medium rounded-xl shadow-lg animate-fade max-w-[90vw]"
@@ -151,7 +151,7 @@ export default function Messenger() {
   }
 
   return (
-    <div className="h-full min-h-[var(--app-height)] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
+    <div className="h-[var(--app-height)] w-full max-w-[100vw] flex flex-col md:flex-row bg-surface dark:bg-dark-bg safe-x overflow-x-hidden">
       {/* ── Toast: уведомление (участник добавлен/удалён и т.д.) — ниже статус-бара, не перекрывает контент ── */}
       {notification && (
         <div
@@ -199,7 +199,7 @@ export default function Messenger() {
       </div>
 
       {/* ── Chat Area ── */}
-      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 h-[var(--app-height)] md:h-auto overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
+      <div className={`${!activeChatId || sidebarOpen ? 'hidden md:flex' : 'flex'} flex-1 min-w-0 min-h-0 h-full md:h-auto overflow-hidden overflow-x-hidden transition-[opacity] duration-200 ease-out`}>
         {activeChatId ? (
           <div className="flex flex-1 h-full min-h-0 min-w-0 overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden transition-[opacity] duration-150 ease-out">

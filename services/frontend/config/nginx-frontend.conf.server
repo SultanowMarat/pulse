@@ -9,12 +9,6 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # Always revalidate SPA shell to avoid stale PWA screen on iOS.
-    location = /index.html {
-        expires -1;
-        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
-    }
-
     # Service Worker и manifest не должны кэшироваться надолго, иначе клиенты/PWA
     # могут "залипнуть" на старой версии приложения.
     location = /sw.js {

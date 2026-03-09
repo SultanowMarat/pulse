@@ -177,6 +177,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const [inChatSearchOpen, setInChatSearchOpen] = useState(false);
   const [inChatSearchQuery, setInChatSearchQuery] = useState('');
   const [inChatSearchIndex, setInChatSearchIndex] = useState(0);
+  const [showTypingInHeader, setShowTypingInHeader] = useState(false);
   const inChatSearchInputRef = useRef<HTMLInputElement>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -189,8 +190,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const prevLen = useRef(0);
   const prevChatIdRef = useRef<string | null>(null);
   const didInitialScrollForChatRef = useRef<string | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
   const stickToBottomRef = useRef(true);
-  const keyboardSettlingUntilRef = useRef(0);
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const BOTTOM_STICK_THRESHOLD = 72;
 
@@ -199,36 +200,30 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     return el.scrollHeight - (el.scrollTop + el.clientHeight) <= BOTTOM_STICK_THRESHOLD;
   }, []);
 
+  const cancelScheduledScroll = useCallback(() => {
+    if (scrollRafRef.current != null) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = null;
+    }
+  }, []);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const el = messagesScrollRef.current;
-    if (!el) {
-      endRef.current?.scrollIntoView({ behavior, block: 'end' });
-      return;
-    }
+    if (!el) return;
     if (behavior === 'smooth') {
-      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      return;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      el.scrollTop = el.scrollHeight;
     }
-    const prevBehavior = el.style.scrollBehavior;
-    el.style.scrollBehavior = 'auto';
-    el.scrollTop = el.scrollHeight;
-    el.style.scrollBehavior = prevBehavior;
   }, []);
 
-  const stabilizeBottom = useCallback(() => {
-    if (!stickToBottomRef.current && Date.now() >= keyboardSettlingUntilRef.current) return;
-    scrollToBottom('auto');
-    requestAnimationFrame(() => {
-      if (stickToBottomRef.current || Date.now() < keyboardSettlingUntilRef.current) scrollToBottom('auto');
+  const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    cancelScheduledScroll();
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      scrollToBottom(behavior);
     });
-    setTimeout(() => {
-      if (stickToBottomRef.current || Date.now() < keyboardSettlingUntilRef.current) scrollToBottom('auto');
-    }, 120);
-  }, [scrollToBottom]);
-
-  const isKeyboardSettling = useCallback((): boolean => {
-    return Date.now() < keyboardSettlingUntilRef.current;
-  }, []);
+  }, [cancelScheduledScroll, scrollToBottom]);
 
   const mentionCandidates = useMemo(() => {
     const members = chat?.members || [];
@@ -255,123 +250,51 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const displayReplyTo = chatIdChanged ? null : replyTo;
   const displayEditingMessage = chatIdChanged ? null : editingMessage;
 
-  // При открытии чата — сразу показываем конец без какой-либо видимой прокрутки (как в Telegram)
+  // При открытии чата — сразу показываем конец без видимой прокрутки.
   useLayoutEffect(() => {
     if (!activeChatId || chatMessages.length === 0) return;
     if (didInitialScrollForChatRef.current === activeChatId) return;
     didInitialScrollForChatRef.current = activeChatId;
     stickToBottomRef.current = true;
     prevLen.current = chatMessages.length;
-    scrollToBottom('auto');
-  }, [activeChatId, chatMessages.length, scrollToBottom]);
+    scheduleScrollToBottom('auto');
+  }, [activeChatId, chatMessages.length, scheduleScrollToBottom]);
 
-  // Сброс «начального скролла» при смене чата, чтобы новый чат открылся сразу с конца
+  // Сброс состояния скролла при смене чата.
   useEffect(() => {
     didInitialScrollForChatRef.current = null;
     stickToBottomRef.current = true;
-  }, [activeChatId]);
+    prevLen.current = chatMessages.length;
+  }, [activeChatId, chatMessages.length]);
 
-  // Telegram-style sticky bottom: если пользователь у нижнего края, новые сообщения удерживают чат внизу.
+  // Обновляем флаг "пользователь внизу".
   useEffect(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
     const onScroll = () => {
-      if (isKeyboardSettling()) {
-        stickToBottomRef.current = true;
-        return;
-      }
       stickToBottomRef.current = isScrollNearBottom(el);
     };
     onScroll();
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [activeChatId, isKeyboardSettling, isScrollNearBottom]);
+  }, [activeChatId, isScrollNearBottom]);
 
-  // Плавный скролл вниз только при новом сообщении в уже открытом чате (не при первой загрузке)
+  // Новые сообщения: держим низ как в Telegram (если у края или сообщение своё).
   useEffect(() => {
-    const prevCount = prevLen.current;
-    if (chatMessages.length <= prevCount) {
+    if (chatMessages.length <= prevLen.current) {
       prevLen.current = chatMessages.length;
       return;
     }
-    const isInitialLoad = prevCount === 0;
+    const isInitialLoad = prevLen.current === 0;
     prevLen.current = chatMessages.length;
     const last = chatMessages[chatMessages.length - 1];
     const lastFromMe = !!last && last.sender_id === user?.id;
     if (!(isInitialLoad || stickToBottomRef.current || lastFromMe)) return;
+    scheduleScrollToBottom('auto');
+  }, [chatMessages, scheduleScrollToBottom, user?.id]);
 
-    requestAnimationFrame(() => {
-      scrollToBottom(isInitialLoad ? 'auto' : 'smooth');
-      // Добиваемся точного прилипания после перерасчёта высот (изображения/аватар/voice metadata).
-      setTimeout(() => scrollToBottom('auto'), 120);
-    });
-  }, [chatMessages, scrollToBottom, user?.id]);
+  useEffect(() => cancelScheduledScroll, [cancelScheduledScroll]);
 
-  // На изменениях размеров (клавиатура, safe-area, композер) сохраняем прилипание внизу.
-  useLayoutEffect(() => {
-    const scrollEl = messagesScrollRef.current;
-    if (!scrollEl || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => {
-      if (stickToBottomRef.current || isKeyboardSettling()) stabilizeBottom();
-    });
-    observer.observe(scrollEl);
-    if (composerRef.current) observer.observe(composerRef.current);
-    const content = scrollEl.firstElementChild;
-    if (content) observer.observe(content);
-    return () => observer.disconnect();
-  }, [activeChatId, isKeyboardSettling, stabilizeBottom]);
-
-  // Dynamic bottom offset for different platforms: iOS/Android/PWA/Desktop.
-  // Keeps last messages visible above composer regardless of keyboard/safe-area differences.
-  useLayoutEffect(() => {
-    const scrollEl = messagesScrollRef.current;
-    const composerEl = composerRef.current;
-    if (!scrollEl || !composerEl) return;
-
-    const applyComposerHeight = () => {
-      const h = Math.max(56, Math.ceil(composerEl.getBoundingClientRect().height));
-      scrollEl.style.setProperty('--chat-composer-height', `${h}px`);
-    };
-
-    applyComposerHeight();
-
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => applyComposerHeight());
-      observer.observe(composerEl);
-    }
-
-    const onViewportResize = () => applyComposerHeight();
-    window.addEventListener('resize', onViewportResize, { passive: true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
-    }
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', onViewportResize);
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', onViewportResize);
-      }
-      scrollEl.style.removeProperty('--chat-composer-height');
-    };
-  }, [activeChatId]);
-
-  useEffect(() => {
-    const onViewportResize = () => {
-      if (stickToBottomRef.current || isKeyboardSettling()) stabilizeBottom();
-    };
-    window.addEventListener('resize', onViewportResize, { passive: true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
-    }
-    return () => {
-      window.removeEventListener('resize', onViewportResize);
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', onViewportResize);
-      }
-    };
-  }, [isKeyboardSettling, stabilizeBottom]);
 
   // Сброс локального состояния при смене чата, чтобы не было вспышки старого контента (ответ/перес send/поле ввода)
   useEffect(() => {
@@ -519,10 +442,18 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
   const handleSend = useCallback(() => {
     if (!text.trim() || !activeChatId) return;
-    if (editingMessage) { editMessage(editingMessage.id, text.trim()); setText(''); return; }
+    if (editingMessage) {
+      editMessage(editingMessage.id, text.trim());
+      setText('');
+      stickToBottomRef.current = true;
+      scheduleScrollToBottom('auto');
+      return;
+    }
     sendMessage(activeChatId, text.trim());
     setText('');
-  }, [text, activeChatId, sendMessage, editMessage, editingMessage]);
+    stickToBottomRef.current = true;
+    scheduleScrollToBottom('auto');
+  }, [text, activeChatId, sendMessage, editMessage, editingMessage, scheduleScrollToBottom]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (mentionOpen && mentionCandidates.length > 0) {
@@ -771,6 +702,20 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     setForwardMsg(null);
   }, [forwardMsg, sendMessage]);
 
+  const typNames = typing.map((uid) => chat?.members.find((m) => m.id === uid)?.username).filter(Boolean);
+  const hasTypingInHeader = typNames.length > 0;
+  useEffect(() => {
+    if (!activeChatId) {
+      setShowTypingInHeader(false);
+      return;
+    }
+    if (hasTypingInHeader) setShowTypingInHeader(true);
+    else {
+      const id = setTimeout(() => setShowTypingInHeader(false), 1200);
+      return () => clearTimeout(id);
+    }
+  }, [activeChatId, hasTypingInHeader]);
+
   if (!activeChatId) return null;
   if (!chat) {
     return (
@@ -783,19 +728,9 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
   const chatName = getName(chat, user?.id || '');
   const chatOnline = getOnline(chat, user?.id || '', onlineUsers);
-  const typNames = typing.map((uid) => chat.members.find((m) => m.id === uid)?.username).filter(Boolean);
-  const hasTypingInHeader = typNames.length > 0;
-  const [showTypingInHeader, setShowTypingInHeader] = useState(hasTypingInHeader);
-  useEffect(() => {
-    if (hasTypingInHeader) setShowTypingInHeader(true);
-    else {
-      const id = setTimeout(() => setShowTypingInHeader(false), 1200);
-      return () => clearTimeout(id);
-    }
-  }, [hasTypingInHeader]);
 
   return (
-    <div className="h-[var(--app-height)] md:h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
+    <div className="h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
       {/* ── Header ── */}
       <div className="shrink-0 sticky top-0 z-20 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border bg-white dark:bg-dark-bg min-w-0 overflow-hidden">
         {onOpenProfile && (
@@ -957,9 +892,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
       {/* ── Messages ── */}
       <div ref={messagesScrollRef} className="chat-messages-scroll flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 sm:px-4 pt-2 pb-2 sm:pt-3 sm:pb-3 scroll-smooth touch-pan-y">
-        <div className="min-h-full flex flex-col justify-end gap-0.5 pb-[calc(var(--chat-composer-height,72px)+var(--composer-bottom,0px))] md:pb-0">
-          {/* Spacer: прижимает сообщения к низу при малом числе сообщений; при большом — колонка растёт и скролл работает. */}
-          <div className="min-h-0 flex-1 shrink-0" aria-hidden />
+        <div className="min-h-full flex flex-col justify-end gap-0.5">
           {chatMessages.map((msg, i) => {
             const prev = chatMessages[i - 1];
             const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
@@ -1055,7 +988,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       {/* На мобильных: композер максимально внизу (fixed по low visualViewport); при вводе — вплотную к клавиатуре. На десктопе — sticky. */}
       <div
         ref={composerRef}
-        className="shrink-0 z-20 px-2.5 sm:px-4 py-1 sm:py-2.5 pb-[var(--composer-padding-bottom,max(2px,env(safe-area-inset-bottom)))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible fixed left-0 right-0 bottom-[var(--composer-bottom)] md:static md:sticky md:bottom-0"
+        className="shrink-0 z-20 px-2.5 sm:px-4 py-1 sm:py-2.5 pb-[var(--composer-padding-bottom,max(2px,env(safe-area-inset-bottom)))] sm:pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-white dark:bg-dark-bg border-t border-surface-border dark:border-dark-border min-w-0 max-w-full overflow-visible"
       >
         <div className="relative min-w-0 max-w-full overflow-visible" ref={inputEmojiPickerRef}>
           <div className="flex items-end gap-1.5 sm:gap-2 min-w-0 max-w-full">
@@ -1079,20 +1012,11 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                     setText(e.target.value);
                     handleTyping();
                     updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
-                    if (stickToBottomRef.current) requestAnimationFrame(() => scrollToBottom('auto'));
+                    if (stickToBottomRef.current) scheduleScrollToBottom('auto');
                   }}
                   onClick={(e) => {
                     const t = e.currentTarget;
                     updateMentionState(t.value, t.selectionStart ?? t.value.length);
-                  }}
-                  onFocus={() => {
-                    stickToBottomRef.current = true;
-                    keyboardSettlingUntilRef.current = Date.now() + 2000;
-                    stabilizeBottom();
-                  }}
-                  onBlur={() => {
-                    keyboardSettlingUntilRef.current = 0;
-                    stickToBottomRef.current = isScrollNearBottom(messagesScrollRef.current);
                   }}
                   onKeyDown={handleKeyDown} placeholder="Написать сообщение..." rows={1}
                   className="flex-1 min-w-0 resize-none px-3 py-1.5 sm:py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[13px] sm:text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-28 sm:max-h-32 overflow-y-auto overflow-x-hidden break-words"
@@ -1579,3 +1503,4 @@ function getOnline(c: ChatWithLastMessage, myId: string, o: Record<string, boole
   const other = c.members.find((m) => m.id !== myId);
   return other ? (o[other.id] ?? other.is_online) : undefined;
 }
+

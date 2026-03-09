@@ -14,3 +14,4 @@ macos/app/
 macos/.vite/
 ssh/
 *.md
+tools/
