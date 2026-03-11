@@ -254,8 +254,8 @@ interface ChatState {
   createGroupChat: (name: string, memberIds: string[]) => Promise<ChatWithLastMessage>;
   searchUsers: (query: string) => Promise<UserPublic[]>;
   searchMessages: (query: string, chatId?: string) => Promise<Message[]>;
-  uploadFile: (file: File) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
-  uploadVoice: (file: File) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
+  uploadFile: (file: File, opts?: api.UploadOptions) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
+  uploadVoice: (file: File, opts?: api.UploadOptions) => Promise<{ url: string; file_name: string; file_size: number; content_type: string }>;
   addOptimisticVoiceMessage: (chatId: string) => { optId: string; clientMsgId: string };
   removeOptimisticMessage: (chatId: string, optId: string) => void;
   updateOptimisticVoiceMessage: (chatId: string, optId: string, opts: { fileUrl: string; fileName?: string; fileSize?: number }) => void;
@@ -554,7 +554,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   updateElectronBadge: () => {
     if (typeof window === 'undefined') return;
     const total = get().chats.reduce((n, c) => n + (c.unread_count || 0), 0);
-    document.title = total > 0 ? `(${total}) BuhChat` : 'BuhChat';
+    document.title = total > 0 ? `(${total}) pulse` : 'pulse';
     updateFaviconBadge(total);
     const api = (window as unknown as { electronAPI?: { setBadgeCount?: (n: number) => void } }).electronAPI;
     if (api?.setBadgeCount) {
@@ -901,7 +901,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   searchUsers: (query) => api.searchUsers(query),
   searchMessages: (query, chatId) => api.searchMessages(query, 30, chatId),
-  uploadFile: async (file) => {
+  uploadFile: async (file, opts) => {
     if (get().appStatus.read_only) {
       get().setNotification('Идёт обслуживание: загрузка файлов временно отключена.');
       throw new Error('read-only mode');
@@ -913,7 +913,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       throw new Error(text);
     }
     try {
-      return await api.uploadFile(file);
+      return await api.uploadFile(file, opts);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const lower = msg.toLowerCase();
@@ -929,13 +929,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       throw e;
     }
   },
-  uploadVoice: async (file) => {
+  uploadVoice: async (file, opts) => {
     if (get().appStatus.read_only) {
       get().setNotification('Идёт обслуживание: отправка голосовых временно отключена.');
       throw new Error('read-only mode');
     }
     try {
-      return await api.uploadAudio(file);
+      return await api.uploadAudio(file, opts);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.toLowerCase().includes('file too large') || msg.toLowerCase().includes('too large')) {

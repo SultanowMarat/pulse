@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/messenger/internal/config"
-	"github.com/messenger/internal/fileserver"
+	"github.com/pulse/internal/config"
+	"github.com/pulse/internal/fileserver"
 )
 
 type FileHandler struct {
@@ -46,7 +46,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		h.fileSvc.Upload(w, r)
 		return
 	}
-	// Прокси на микросервис файлов (Content-Length обязателен для корректного парсинга multipart)
+	// ÐŸÑ€>:A8 =0 <8:Ñ€>A5Ñ€28A Ñ„09;>2 (Content-Length >1O70Ñ‚5;5= 4;O :>Ñ€Ñ€5:Ñ‚=>3> ?0Ñ€A8=30 multipart)
 	proxyURL := h.fileBase + "/upload"
 	proxyReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, proxyURL, nil)
 	if err != nil {
@@ -80,7 +80,7 @@ func (h *FileHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.fileSvc.Serve(w, r, filename)
 		return
 	}
-	// Прокси GET на микросервис файлов
+	// ÐŸÑ€>:A8 GET =0 <8:Ñ€>A5Ñ€28A Ñ„09;>2
 	rawQuery := ""
 	if name := r.URL.Query().Get("name"); name != "" {
 		rawQuery = "name=" + url.QueryEscape(name)

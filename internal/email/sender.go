@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/messenger/internal/config"
+	"github.com/pulse/internal/config"
 )
 
 type Sender struct {
@@ -21,17 +21,17 @@ func NewSender(cfg *config.SMTPConfig) *Sender {
 
 func (s *Sender) SendOTP(ctx context.Context, to, code string) error {
 	if !isConfigured(s.cfg) {
-		return fmt.Errorf("email: SMTP не настроен")
+		return fmt.Errorf("email: SMTP =5 =0AÑ‚Ñ€>5=")
 	}
 	from := s.cfg.FromEmail
 	if from == "" {
 		from = s.cfg.Username
 	}
-	body := fmt.Sprintf("Ваш код: %s\n\nКод действителен 5 минут.", code)
+	body := fmt.Sprintf("Ð’0Ñˆ :>4: %s\n\nÐš>4 459AÑ‚28Ñ‚5;5= 5 <8=ÑƒÑ‚.", code)
 	var buf bytes.Buffer
 	buf.WriteString("From: " + s.cfg.FromName + " <" + from + ">\r\n")
 	buf.WriteString("To: " + to + "\r\n")
-	buf.WriteString("Subject: Код для входа\r\n")
+	buf.WriteString("Subject: Ðš>4 4;O 2Ñ…>40\r\n")
 	buf.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	buf.WriteString("Content-Type: text/plain; charset=utf-8\r\n\r\n")
 	buf.WriteString(body)
@@ -47,7 +47,7 @@ func (s *Sender) SendOTP(ctx context.Context, to, code string) error {
 	}
 }
 
-// SendTest отправляет тестовое письмо на to (код TEST-xxxx) для проверки SMTP.
+// SendTest >Ñ‚?Ñ€02;O5Ñ‚ Ñ‚5AÑ‚>2>5 ?8AÑŒ<> =0 to (:>4 TEST-xxxx) 4;O ?Ñ€>25Ñ€:8 SMTP.
 func (s *Sender) SendTest(ctx context.Context, to string) error {
 	code := fmt.Sprintf("TEST-%d", time.Now().Unix()%10000)
 	return s.SendOTP(ctx, to, code)

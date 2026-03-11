@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/service"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/service"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -33,29 +33,33 @@ func (h *AuthHandler) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Email == "" {
-		writeError(w, http.StatusBadRequest, "email обязателен")
+		writeError(w, http.StatusBadRequest, "email >1O70Ñ‚5;5=")
 		return
 	}
 	resp, err := h.otpSvc.RequestCode(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidLoginKey) {
+			writeError(w, http.StatusUnauthorized, "invalid or expired login key")
+			return
+		}
 		if errors.Is(err, service.ErrRateLimitExceeded) {
-			writeError(w, http.StatusTooManyRequests, "Слишком много запросов. Попробуйте позже.")
+			writeError(w, http.StatusTooManyRequests, "!;8Ñˆ:>< <=>3> 70?Ñ€>A>2. ÐŸ>?Ñ€>1Ñƒ9Ñ‚5 ?>765.")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidEmail) {
-			writeError(w, http.StatusBadRequest, "Неверный формат email")
+			writeError(w, http.StatusBadRequest, "525Ñ€=Ñ‹9 Ñ„>Ñ€<0Ñ‚ email")
 			return
 		}
 		if errors.Is(err, service.ErrUserDisabled) {
-			writeError(w, http.StatusForbidden, "Доступ запрещён. Обратитесь к администратору.")
+			writeError(w, http.StatusForbidden, "Ð”>AÑ‚Ñƒ? 70?Ñ€5Ñ‰Ñ‘=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
 			return
 		}
 		if errors.Is(err, service.ErrUserNotInvited) {
-			writeError(w, http.StatusForbidden, "Пользователь не найден. Обратитесь к администратору.")
+			writeError(w, http.StatusForbidden, "ÐŸ>;ÑŒ7>20Ñ‚5;ÑŒ =5 =0945=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
 			return
 		}
 		logger.Errorf("request-code send failed for %s: %v", req.Email, err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить код")
+		writeError(w, http.StatusInternalServerError, "5 Ñƒ40;>AÑŒ >Ñ‚?Ñ€028Ñ‚ÑŒ :>4")
 		return
 	}
 	if resp != nil {
@@ -78,19 +82,19 @@ func (h *AuthHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.otpSvc.VerifyCode(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidOTP) {
-			writeError(w, http.StatusUnauthorized, "Неверный или истёкший код")
+			writeError(w, http.StatusUnauthorized, "525Ñ€=Ñ‹9 8;8 8AÑ‚Ñ‘:Ñˆ89 :>4")
 			return
 		}
 		if errors.Is(err, service.ErrUserDisabled) {
-			writeError(w, http.StatusForbidden, "Доступ запрещён. Обратитесь к администратору.")
+			writeError(w, http.StatusForbidden, "Ð”>AÑ‚Ñƒ? 70?Ñ€5Ñ‰Ñ‘=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
 			return
 		}
 		if errors.Is(err, service.ErrUserNotInvited) {
-			writeError(w, http.StatusForbidden, "Пользователь не найден. Обратитесь к администратору.")
+			writeError(w, http.StatusForbidden, "ÐŸ>;ÑŒ7>20Ñ‚5;ÑŒ =5 =0945=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
 			return
 		}
 		logger.Errorf("verify-code error email=%s device_id=%s: %v", req.Email, req.DeviceID, err)
-		msg := "Ошибка верификации"
+		msg := "ÐžÑˆ81:0 25Ñ€8Ñ„8:0Ñ†88"
 		if os.Getenv("APP_ENV") != "production" && os.Getenv("DEBUG") != "" {
 			msg = msg + ": " + strings.ReplaceAll(err.Error(), "\n", " ")
 		}
@@ -112,7 +116,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.otpSvc.ListSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Ошибка загрузки сессий")
+		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 703Ñ€Ñƒ7:8 A5AA89")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": list})
@@ -131,11 +135,11 @@ func (h *AuthHandler) LogoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, err := h.otpSvc.LogoutSession(r.Context(), userID, sessionID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Ошибка выхода")
+		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
 		return
 	}
 	if !ok {
-		writeError(w, http.StatusNotFound, "Сессия не найдена")
+		writeError(w, http.StatusNotFound, "!5AA8O =5 =0945=0")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -153,7 +157,7 @@ func (h *AuthHandler) LogoutAllSessions(w http.ResponseWriter, r *http.Request) 
 	}
 	_, err := h.otpSvc.LogoutAllSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Ошибка выхода")
+		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -173,7 +177,7 @@ func (h *AuthHandler) InternalLogoutUserSessions(w http.ResponseWriter, r *http.
 	}
 	n, err := h.otpSvc.LogoutAllSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Ошибка выхода")
+		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "revoked": n})

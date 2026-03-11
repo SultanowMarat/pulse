@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/messenger/internal/cache"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/runtime"
+	"github.com/pulse/internal/cache"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/runtime"
 )
 
-// PushNotifier отправляет пуш-уведомления. Если nil — пуши не отправляются.
+// PushNotifier >Ñ‚?Ñ€02;O5Ñ‚ ?ÑƒÑˆ-Ñƒ254><;5=8O. Ð•A;8 nil â€” ?ÑƒÑˆ8 =5 >Ñ‚?Ñ€02;OÑŽÑ‚AO.
 type PushNotifier interface {
 	Notify(ctx context.Context, userID, title, body string, data map[string]string)
 }
@@ -241,7 +241,7 @@ func (h *Hub) handleNewMessage(ctx context.Context, c *Client, msg IncomingMessa
 		replyToID = &msg.ReplyToID
 	}
 
-	// Нормализация имени файла: "+" часто приходит вместо пробела (URL-кодирование), сохраняем в БД с пробелами (UTF-8).
+	// >Ñ€<0;870Ñ†8O 8<5=8 Ñ„09;0: "+" Ñ‡0AÑ‚> ?Ñ€8Ñ…>48Ñ‚ 2<5AÑ‚> ?Ñ€>15;0 (URL-:>48Ñ€>20=85), A>Ñ…Ñ€0=O5< 2 Ð‘Ð” A ?Ñ€>15;0<8 (UTF-8).
 	fileName := strings.TrimSpace(strings.ReplaceAll(msg.FileName, "+", " "))
 	now := time.Now().UTC()
 	m := &model.Message{
@@ -299,18 +299,18 @@ func (h *Hub) handleNewMessage(ctx context.Context, c *Client, msg IncomingMessa
 		h.sendToUser(uid, out)
 	}
 
-	// Пуш-уведомления получателям (кроме отправителя)
+	// ÐŸÑƒÑˆ-Ñƒ254><;5=8O ?>;ÑƒÑ‡0Ñ‚5;O< (:Ñ€><5 >Ñ‚?Ñ€028Ñ‚5;O)
 	if h.pushClient != nil {
 		senderName := ""
 		if m.Sender != nil {
 			senderName = m.Sender.Username
 		}
 		if senderName == "" {
-			senderName = "Сообщение"
+			senderName = "!>>1Ñ‰5=85"
 		}
 		body := m.Content
 		if m.ContentType != "text" || body == "" {
-			body = "Вложение"
+			body = "Ð’;>65=85"
 		}
 		if len(body) > 120 {
 			body = body[:117] + "..."

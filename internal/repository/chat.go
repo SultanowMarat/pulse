@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
 )
 
 type ChatRepository struct {
@@ -24,8 +24,8 @@ func NewChatRepository(pool *pgxpool.Pool) *ChatRepository {
 func (r *ChatRepository) Create(ctx context.Context, c *model.Chat) error {
 	defer logger.DeferLogDuration("chat.Create", time.Now())()
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO chats (id, chat_type, system_key, name, description, avatar_url, created_by, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO chats (id, chat_type, system_key, name, description, avatar_url, created_by, created_at, is_system)
+		 VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, CASE WHEN NULLIF($3, '') IS NULL THEN FALSE ELSE TRUE END)`,
 		c.ID, c.ChatType, c.SystemKey, c.Name, c.Description, c.AvatarURL, c.CreatedBy, c.CreatedAt,
 	)
 	if err != nil {
@@ -125,7 +125,7 @@ func (r *ChatRepository) GetMembersByChatIDs(ctx context.Context, chatIDs []stri
 
 	rows, err := r.pool.Query(ctx,
 		`SELECT cm.chat_id,
-		        u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.company,''), COALESCE(u.position,''),
+		        u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.position,''),
 		        u.avatar_url, u.is_online, u.last_seen_at, u.disabled_at
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
@@ -141,7 +141,7 @@ func (r *ChatRepository) GetMembersByChatIDs(ctx context.Context, chatIDs []stri
 	for rows.Next() {
 		var chatID string
 		var u model.UserPublic
-		if err := rows.Scan(&chatID, &u.ID, &u.Username, &u.Email, &u.Phone, &u.Company, &u.Position, &u.AvatarURL, &u.IsOnline, &u.LastSeenAt, &u.DisabledAt); err != nil {
+		if err := rows.Scan(&chatID, &u.ID, &u.Username, &u.Email, &u.Phone, &u.Position, &u.AvatarURL, &u.IsOnline, &u.LastSeenAt, &u.DisabledAt); err != nil {
 			return nil, fmt.Errorf("chatRepo.GetMembersByChatIDs scan: %w", err)
 		}
 		out[chatID] = append(out[chatID], u)
@@ -358,11 +358,11 @@ func (r *ChatRepository) FindNotesChat(ctx context.Context, userID string) (*mod
 	return c, nil
 }
 
-// Service/system chat key for "Общий чат".
+// Service/system chat key for "Ðž1Ñ‰89 Ñ‡0Ñ‚".
 const GeneralChatSystemKey = "general"
 
 // Default name for the general chat.
-const GeneralChatName = "Общий чат"
+const GeneralChatName = "Ðž1Ñ‰89 Ñ‡0Ñ‚"
 
 // GetBySystemKey returns a chat by system_key.
 func (r *ChatRepository) GetBySystemKey(ctx context.Context, systemKey string) (*model.Chat, error) {
@@ -409,10 +409,10 @@ func (r *ChatRepository) GetOrCreateGeneralChat(ctx context.Context, createdBy s
 }
 
 // NotesChatName is the display name for the system notes chat.
-const NotesChatName = "Заметки"
+const NotesChatName = "Ð—0<5Ñ‚:8"
 
 // NotesChatDescription is the text shown in the notes chat.
-const NotesChatDescription = "Это чат для личных заметок. Здесь удобно хранить:\n— планы на день;\n— список покупок;\n— полезные ссылки;\n— мысли и идеи.\n\nЭто ваш личный чат, в него нельзя добавлять других людей. Но при желании вы можете пересылать сообщения из заметок в другие чаты."
+const NotesChatDescription = "-Ñ‚> Ñ‡0Ñ‚ 4;O ;8Ñ‡=Ñ‹Ñ… 70<5Ñ‚>:. Ð—45AÑŒ Ñƒ4>1=> Ñ…Ñ€0=8Ñ‚ÑŒ:\nâ€” ?;0=Ñ‹ =0 45=ÑŒ;\nâ€” A?8A>: ?>:Ñƒ?>:;\nâ€” ?>;57=Ñ‹5 AAÑ‹;:8;\nâ€” <Ñ‹A;8 8 8458.\n\n-Ñ‚> 20Ñˆ ;8Ñ‡=Ñ‹9 Ñ‡0Ñ‚, 2 =53> =5;ÑŒ7O 4>102;OÑ‚ÑŒ 4Ñ€Ñƒ38Ñ… ;ÑŽ459. > ?Ñ€8 65;0=88 2Ñ‹ <>65Ñ‚5 ?5Ñ€5AÑ‹;0Ñ‚ÑŒ A>>1Ñ‰5=8O 87 70<5Ñ‚>: 2 4Ñ€Ñƒ385 Ñ‡0Ñ‚Ñ‹."
 
 // GetOrCreateNotesChat returns the user's notes chat, creating it if it does not exist.
 func (r *ChatRepository) GetOrCreateNotesChat(ctx context.Context, userID string) (*model.Chat, error) {

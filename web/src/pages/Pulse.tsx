@@ -8,8 +8,9 @@ import * as api from '../api';
 import ChatInfo from '../components/ChatInfo';
 
 const LEFT_COMMANDS_HIDDEN_KEY = 'left-commands-hidden';
+const ADMIN_ACCESS_CACHE_KEY = 'admin-access-cache';
 
-export default function Messenger() {
+export default function Pulse() {
   const { user, logout, updateProfile, loadUser, profileLoadError } = useAuthStore();
   const { activeChatId, chats, connectWS, disconnectWS, fetchChats, fetchFavorites, hydrateFavoritesFromStorage, setActiveChat, notification, setNotification, appStatus } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -23,7 +24,13 @@ export default function Messenger() {
   const [showInfo, setShowInfo] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [navTab, setNavTab] = useState<'chats' | 'admin'>('chats');
-  const [myAdministrator, setMyAdministrator] = useState(false);
+  const [myAdministrator, setMyAdministrator] = useState(() => {
+    try {
+      return localStorage.getItem(ADMIN_ACCESS_CACHE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     try {
@@ -58,9 +65,38 @@ export default function Messenger() {
     const meId = user?.id;
     if (!meId) return;
     let cancelled = false;
-    api.getUserPermissions(meId)
-      .then((res) => { if (!cancelled) setMyAdministrator(res.administrator); })
-      .catch(() => { if (!cancelled) setMyAdministrator(false); });
+
+    const setAdmin = (next: boolean) => {
+      if (cancelled) return;
+      setMyAdministrator(next);
+      try {
+        if (next) localStorage.setItem(ADMIN_ACCESS_CACHE_KEY, '1');
+        else localStorage.removeItem(ADMIN_ACCESS_CACHE_KEY);
+      } catch {
+        // ignore cache errors
+      }
+    };
+
+    (async () => {
+      try {
+        const res = await api.getUserPermissions(meId);
+        if (res.administrator) {
+          setAdmin(true);
+          return;
+        }
+      } catch {
+        // continue with capability probe fallback
+      }
+
+      // Fallback capability probe: if this endpoint is accessible, user is admin.
+      try {
+        await api.listEmployeesPage({ limit: 1, offset: 0 });
+        setAdmin(true);
+      } catch {
+        setAdmin(false);
+      }
+    })();
+
     return () => { cancelled = true; };
   }, [user?.id]);
 
@@ -302,7 +338,6 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [company, setCompany] = useState(user?.company || '');
   const [position, setPosition] = useState(user?.position || '');
   const [installLinks, setInstallLinks] = useState<api.InstallLinksConfig | null>(null);
   const [showInstall, setShowInstall] = useState(false);
@@ -346,11 +381,11 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     if (eErr || pErr) return;
     setSaving(true);
     try {
-      await updateProfile({ username, email, phone, company, position });
+      await updateProfile({ username, email, phone, position });
     } catch { /* */ }
     setSaving(false);
     onClose();
-  }, [username, email, phone, company, position, updateProfile, onClose]);
+  }, [username, email, phone, position, updateProfile, onClose]);
 
   const handleAvatar = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -488,13 +523,6 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
             />
             <ProfileEditField
               icon={<IconUser size={20} />}
-              label="Компания (опционально)"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Компания"
-            />
-            <ProfileEditField
-              icon={<IconUser size={20} />}
               label="Должность (опционально)"
               value={position}
               onChange={(e) => setPosition(e.target.value)}
@@ -563,3 +591,4 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

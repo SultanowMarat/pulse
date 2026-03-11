@@ -23,18 +23,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/messenger/internal/broker"
-	"github.com/messenger/internal/cache"
-	"github.com/messenger/internal/config"
-	"github.com/messenger/internal/handler"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/outbox"
-	"github.com/messenger/internal/push"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/runtime"
-	"github.com/messenger/internal/startup"
-	"github.com/messenger/internal/ws"
+	"github.com/pulse/internal/broker"
+	"github.com/pulse/internal/cache"
+	"github.com/pulse/internal/config"
+	"github.com/pulse/internal/handler"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/outbox"
+	"github.com/pulse/internal/push"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/runtime"
+	"github.com/pulse/internal/startup"
+	"github.com/pulse/internal/ws"
 )
 
 func main() {
@@ -189,7 +189,7 @@ func main() {
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Logger)
 	r.Use(middleware.RecoverJSON)
-	// Не сжимать WebSocket — иначе ResponseWriter не реализует http.Hijacker и upgrade даёт 500.
+	// 5 A68<0Ñ‚ÑŒ WebSocket â€” 8=0Ñ‡5 ResponseWriter =5 Ñ€50;87Ñƒ5Ñ‚ http.Hijacker 8 upgrade 40Ñ‘Ñ‚ 500.
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
@@ -241,6 +241,7 @@ func main() {
 		r.Get("/api/users/{id}/stats", userH.GetUserStats)
 		r.Get("/api/users/{id}/permissions", userH.GetUserPermissions)
 		r.Put("/api/users/{id}/permissions", userH.UpdateUserPermissions)
+		r.Post("/api/users/{id}/login-key/generate", userH.GenerateUserLoginKey)
 		r.Put("/api/users/{id}/disable", userH.SetUserDisabled)
 		r.Post("/api/users/{id}/logout-all", userH.LogoutAllDevices)
 		r.Get("/api/admin/mail-settings", adminH.GetMailSettings)
@@ -343,7 +344,7 @@ func main() {
 func authLegacyGone(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusGone)
-	const msg = `{"error":"Вход по паролю отключён. Используется вход по коду на email. Обновите страницу (Ctrl+F5) или пересоберите фронт: cd web && npm run build"}`
+	const msg = `{"error":"Ð’Ñ…>4 ?> ?0Ñ€>;ÑŽ >Ñ‚:;ÑŽÑ‡Ñ‘=. Ð˜A?>;ÑŒ7Ñƒ5Ñ‚AO 2Ñ…>4 ?> :>4Ñƒ =0 email. Ðž1=>28Ñ‚5 AÑ‚Ñ€0=8Ñ†Ñƒ (Ctrl+F5) 8;8 ?5Ñ€5A>15Ñ€8Ñ‚5 Ñ„Ñ€>=Ñ‚: cd web && npm run build"}`
 	w.Write([]byte(msg))
 }
 
@@ -437,9 +438,9 @@ func runMigrations(pool *pgxpool.Pool) {
 func startEmbeddedPostgres(cfg *config.Config) (*embeddedpostgres.EmbeddedPostgres, error) {
 	const (
 		port     = 5432
-		user     = "messenger"
-		password = "messenger_secret"
-		database = "messenger"
+		user     = "pulse"
+		password = "pulse_secret"
+		database = "pulse"
 	)
 
 	dataDir := filepath.Join(".", ".pgdata")

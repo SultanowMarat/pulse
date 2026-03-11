@@ -15,12 +15,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/authkey"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
 )
 
-// phoneRe — международный формат: + и 8–15 цифр (E.164).
+// phoneRe â€” <564Ñƒ=0Ñ€>4=Ñ‹9 Ñ„>Ñ€<0Ñ‚: + 8 8â€“15 Ñ†8Ñ„Ñ€ (E.164).
 var phoneRe = regexp.MustCompile(`^\+\d{8,15}$`)
 
 type UserHandler struct {
@@ -107,7 +109,7 @@ func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GetEmployees возвращает всех пользователей (список сотрудников). Только для администратора.
+// GetEmployees 2>72Ñ€0Ñ‰05Ñ‚ 2A5Ñ… ?>;ÑŒ7>20Ñ‚5;59 (A?8A>: A>Ñ‚Ñ€Ñƒ4=8:>2). ">;ÑŒ:> 4;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0.
 func (h *UserHandler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	currentUserID := middleware.GetUserID(r.Context())
 	perm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
@@ -143,13 +145,10 @@ func roleFromPermissions(p model.UserPermissions) string {
 	if p.Administrator {
 		return "administrator"
 	}
-	if p.AssistantAdministrator {
-		return "assistant_administrator"
-	}
 	return "member"
 }
 
-// GetEmployeesPage возвращает пользователей постранично. Только для администратора.
+// GetEmployeesPage 2>72Ñ€0Ñ‰05Ñ‚ ?>;ÑŒ7>20Ñ‚5;59 ?>AÑ‚Ñ€0=8Ñ‡=>. ">;ÑŒ:> 4;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0.
 // Query params:
 // - q: search by username/email/phone
 // - limit, offset
@@ -225,22 +224,20 @@ func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CreateUserRequest — создание пользователя администратором (сотрудник без входа; при первом входе по email станет его профиль).
+// CreateUserRequest â€” A>740=85 ?>;ÑŒ7>20Ñ‚5;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€>< (A>Ñ‚Ñ€Ñƒ4=8: 157 2Ñ…>40; ?Ñ€8 ?5Ñ€2>< 2Ñ…>45 ?> email AÑ‚0=5Ñ‚ 53> ?Ñ€>Ñ„8;ÑŒ).
 type CreateUserRequest struct {
 	Email       string `json:"email"`
 	Username    string `json:"username"`
 	Phone       string `json:"phone"`
-	Company     string `json:"company"`
 	Position    string `json:"position"`
 	AvatarURL   string `json:"avatar_url"`
 	Permissions *struct {
-		Administrator          *bool `json:"administrator"`
-		Member                 *bool `json:"member"`
-		AssistantAdministrator *bool `json:"assistant_administrator"`
+		Administrator *bool `json:"administrator"`
+		Member        *bool `json:"member"`
 	} `json:"permissions"`
 }
 
-// CreateUser создаёт пользователя (админ). Email и имя обязательны. При первом входе по этой почте пользователь получит этот профиль.
+// CreateUser A>740Ñ‘Ñ‚ ?>;ÑŒ7>20Ñ‚5;O (04<8=). Email 8 8<O >1O70Ñ‚5;ÑŒ=Ñ‹. ÐŸÑ€8 ?5Ñ€2>< 2Ñ…>45 ?> MÑ‚>9 ?>Ñ‡Ñ‚5 ?>;ÑŒ7>20Ñ‚5;ÑŒ ?>;ÑƒÑ‡8Ñ‚ MÑ‚>Ñ‚ ?Ñ€>Ñ„8;ÑŒ.
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	currentUserID := middleware.GetUserID(r.Context())
 	perm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
@@ -265,14 +262,14 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	phone := strings.TrimSpace(req.Phone)
 	if phone != "" && !phoneRe.MatchString(phone) {
-		writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8–15 digits)")
+		writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
 		return
 	}
 	if exists, err := h.userRepo.ExistsByEmail(r.Context(), emailNorm, ""); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to check email")
 		return
 	} else if exists {
-		writeError(w, http.StatusConflict, "Данный email уже используется")
+		writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 		return
 	}
 	if phone != "" {
@@ -280,7 +277,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Данный номер телефона уже используется")
+			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 			return
 		}
 	}
@@ -289,7 +286,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Username:     username,
 		Email:        emailNorm,
 		Phone:        phone,
-		Company:      strings.TrimSpace(req.Company),
 		Position:     strings.TrimSpace(req.Position),
 		PasswordHash: "",
 		AvatarURL:    strings.TrimSpace(req.AvatarURL),
@@ -308,9 +304,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Permissions.Member != nil {
 			permNew.Member = *req.Permissions.Member
-		}
-		if req.Permissions.AssistantAdministrator != nil {
-			permNew.AssistantAdministrator = *req.Permissions.AssistantAdministrator
 		}
 	}
 	if err := h.permRepo.Upsert(r.Context(), permNew); err != nil {
@@ -344,11 +337,10 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateProfileRequest struct {
-	Username  string `json:"username"`
-	AvatarURL string `json:"avatar_url"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Company   *string `json:"company"`
+	Username  string  `json:"username"`
+	AvatarURL string  `json:"avatar_url"`
+	Email     string  `json:"email"`
+	Phone     string  `json:"phone"`
 	Position  *string `json:"position"`
 }
 
@@ -359,7 +351,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Валидация email (если передан)
+	// Ð’0;840Ñ†8O email (5A;8 ?5Ñ€540=)
 	reqEmail := strings.TrimSpace(req.Email)
 	if reqEmail != "" {
 		if _, err := mail.ParseAddress(reqEmail); err != nil {
@@ -368,11 +360,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Валидация телефона (если передан): строго +993XXXXXXXX
+	// Ð’0;840Ñ†8O Ñ‚5;5Ñ„>=0 (5A;8 ?5Ñ€540=): AÑ‚Ñ€>3> +993XXXXXXXX
 	reqPhone := strings.TrimSpace(req.Phone)
 	if reqPhone != "" {
 		if !phoneRe.MatchString(reqPhone) {
-			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8–15 digits)")
+			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
 			return
 		}
 	}
@@ -400,10 +392,6 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if reqPhone != "" {
 		phone = reqPhone
 	}
-	company := user.Company
-	if req.Company != nil {
-		company = strings.TrimSpace(*req.Company)
-	}
 	position := user.Position
 	if req.Position != nil {
 		position = strings.TrimSpace(*req.Position)
@@ -415,7 +403,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to check email")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Данный email уже используется")
+			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 			return
 		}
 	}
@@ -424,12 +412,12 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Данный номер телефона уже используется")
+			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 			return
 		}
 	}
 
-	if err := h.userRepo.UpdateProfile(r.Context(), userID, username, avatarURL, email, phone, company, position); err != nil {
+	if err := h.userRepo.UpdateProfile(r.Context(), userID, username, avatarURL, email, phone, position); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update profile")
 		return
 	}
@@ -438,12 +426,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user.AvatarURL = avatarURL
 	user.Email = email
 	user.Phone = phone
-	user.Company = company
 	user.Position = position
 	writeJSON(w, http.StatusOK, user.ToPublic())
 }
 
-// UpdateUserProfile обновляет профиль пользователя по id. Своё — всегда, чужое — только администратор.
+// UpdateUserProfile >1=>2;O5Ñ‚ ?Ñ€>Ñ„8;ÑŒ ?>;ÑŒ7>20Ñ‚5;O ?> id. !2>Ñ‘ â€” 2A5340, Ñ‡Ñƒ6>5 â€” Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€.
 func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	currentUserID := middleware.GetUserID(r.Context())
@@ -473,7 +460,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	reqPhone := strings.TrimSpace(req.Phone)
 	if reqPhone != "" {
 		if !phoneRe.MatchString(reqPhone) {
-			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8–15 digits)")
+			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
 			return
 		}
 	}
@@ -502,10 +489,6 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	if reqPhone != "" {
 		phone = reqPhone
 	}
-	company := user.Company
-	if req.Company != nil {
-		company = strings.TrimSpace(*req.Company)
-	}
 	position := user.Position
 	if req.Position != nil {
 		position = strings.TrimSpace(*req.Position)
@@ -517,7 +500,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusInternalServerError, "failed to check email")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Данный email уже используется")
+			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 			return
 		}
 	}
@@ -526,12 +509,12 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Данный номер телефона уже используется")
+			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
 			return
 		}
 	}
 
-	if err := h.userRepo.UpdateProfile(r.Context(), id, username, avatarURL, email, phone, company, position); err != nil {
+	if err := h.userRepo.UpdateProfile(r.Context(), id, username, avatarURL, email, phone, position); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update profile")
 		return
 	}
@@ -539,7 +522,6 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	user.AvatarURL = avatarURL
 	user.Email = email
 	user.Phone = phone
-	user.Company = company
 	user.Position = position
 	writeJSON(w, http.StatusOK, user.ToPublic())
 }
@@ -600,16 +582,21 @@ func (h *UserHandler) GetUserPermissions(w http.ResponseWriter, r *http.Request)
 	}
 	perm, err := h.permRepo.GetByUserID(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get permissions")
+		logger.Errorf("GetUserPermissions fallback for user=%s: %v", id, err)
+		// Do not fail profile/chat loading because of transient permissions read errors.
+		writeJSON(w, http.StatusOK, &model.UserPermissions{
+			UserID:        id,
+			Administrator: false,
+			Member:        true,
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, perm)
 }
 
 type UpdatePermissionsRequest struct {
-	Administrator          *bool `json:"administrator"`
-	Member                 *bool `json:"member"`
-	AssistantAdministrator *bool `json:"assistant_administrator"`
+	Administrator *bool `json:"administrator"`
+	Member        *bool `json:"member"`
 }
 
 func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Request) {
@@ -627,7 +614,7 @@ func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to get user")
 		return
 	}
-	// Менять права другого пользователя может только администратор
+	// Ðœ5=OÑ‚ÑŒ ?Ñ€020 4Ñ€Ñƒ3>3> ?>;ÑŒ7>20Ñ‚5;O <>65Ñ‚ Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€
 	if id != currentUserID {
 		myPerm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
 		if err != nil || !myPerm.Administrator {
@@ -651,9 +638,6 @@ func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Reque
 	if req.Member != nil {
 		perm.Member = *req.Member
 	}
-	if req.AssistantAdministrator != nil {
-		perm.AssistantAdministrator = *req.AssistantAdministrator
-	}
 	if err := h.permRepo.Upsert(r.Context(), perm); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save permissions")
 		return
@@ -661,12 +645,54 @@ func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, perm)
 }
 
-// SetUserDisabledRequest тело запроса включить/отключить пользователя.
+func (h *UserHandler) GenerateUserLoginKey(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	currentUserID := middleware.GetUserID(r.Context())
+	if strings.TrimSpace(id) == "" {
+		writeError(w, http.StatusBadRequest, "user id required")
+		return
+	}
+	myPerm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
+	if err != nil || !myPerm.Administrator {
+		writeError(w, http.StatusForbidden, "only administrator can generate login key")
+		return
+	}
+	if _, err := h.userRepo.GetByID(r.Context(), id); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get user")
+		return
+	}
+
+	token, err := authkey.Generate()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to generate login key")
+		return
+	}
+	if err := h.userRepo.SetLoginKey(r.Context(), id, authkey.Hash(token), time.Now().UTC()); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to save login key")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"login_key":     token,
+		"max_attempts":  authkey.MaxAttempts,
+		"generated_now": true,
+	})
+}
+
+// SetUserDisabledRequest Ñ‚5;> 70?Ñ€>A0 2:;ÑŽÑ‡8Ñ‚ÑŒ/>Ñ‚:;ÑŽÑ‡8Ñ‚ÑŒ ?>;ÑŒ7>20Ñ‚5;O.
 type SetUserDisabledRequest struct {
 	Disabled bool `json:"disabled"`
 }
 
-// SetUserDisabled отключает или включает пользователя (только администратор). Отключённый не может войти.
+// SetUserDisabled >Ñ‚:;ÑŽÑ‡05Ñ‚ 8;8 2:;ÑŽÑ‡05Ñ‚ ?>;ÑŒ7>20Ñ‚5;O (Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€). ÐžÑ‚:;ÑŽÑ‡Ñ‘==Ñ‹9 =5 <>65Ñ‚ 2>9Ñ‚8.
 func (h *UserHandler) SetUserDisabled(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	currentUserID := middleware.GetUserID(r.Context())
@@ -676,7 +702,7 @@ func (h *UserHandler) SetUserDisabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id == currentUserID {
-		writeError(w, http.StatusBadRequest, "нельзя отключить самого себя")
+		writeError(w, http.StatusBadRequest, "=5;ÑŒ7O >Ñ‚:;ÑŽÑ‡8Ñ‚ÑŒ A0<>3> A51O")
 		return
 	}
 	_, err = h.userRepo.GetByID(r.Context(), id)

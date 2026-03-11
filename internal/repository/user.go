@@ -9,17 +9,17 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
 )
 
 var ErrNotFound = errors.New("not found")
 
-// userCols — список колонок для SELECT, включая phone/company/position и disabled_at.
-const userCols = `id, username, email, COALESCE(phone,''), COALESCE(company,''), COALESCE(position,''), password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at`
+// userCols â€” A?8A>: :>;>=>: 4;O SELECT, 2:;ÑŽÑ‡0O phone/position 8 disabled_at.
+const userCols = `id, username, email, COALESCE(phone,''), COALESCE(position,''), password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at`
 
-// userColsAliased — те же колонки с префиксом u. для запросов с JOIN (ListPage). COALESCE должен получать u.column.
-const userColsAliased = `u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.company,''), COALESCE(u.position,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at, u.disabled_at`
+// userColsAliased â€” Ñ‚5 65 :>;>=:8 A ?Ñ€5Ñ„8:A>< u. 4;O 70?Ñ€>A>2 A JOIN (ListPage). COALESCE 4>;65= ?>;ÑƒÑ‡0Ñ‚ÑŒ u.column.
+const userColsAliased = `u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.position,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at, u.disabled_at`
 
 type UserRepository struct {
 	pool *pgxpool.Pool
@@ -34,17 +34,17 @@ type UserPageResult struct {
 	Total int
 }
 
-// scanUser сканирует строку в model.User (порядок соответствует userCols).
+// scanUser A:0=8Ñ€Ñƒ5Ñ‚ AÑ‚Ñ€>:Ñƒ 2 model.User (?>Ñ€O4>: A>>Ñ‚25Ñ‚AÑ‚2Ñƒ5Ñ‚ userCols).
 func scanUser(s interface{ Scan(dest ...any) error }, u *model.User) error {
-	return s.Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.Company, &u.Position, &u.PasswordHash, &u.AvatarURL, &u.LastSeenAt, &u.IsOnline, &u.CreatedAt, &u.DisabledAt)
+	return s.Scan(&u.ID, &u.Username, &u.Email, &u.Phone, &u.Position, &u.PasswordHash, &u.AvatarURL, &u.LastSeenAt, &u.IsOnline, &u.CreatedAt, &u.DisabledAt)
 }
 
 func (r *UserRepository) Create(ctx context.Context, u *model.User) error {
 	defer logger.DeferLogDuration("user.Create", time.Now())()
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO users (id, username, email, phone, company, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		u.ID, u.Username, u.Email, u.Phone, u.Company, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
+		`INSERT INTO users (id, username, email, phone, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		u.ID, u.Username, u.Email, u.Phone, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
 	)
 	if err != nil {
 		return fmt.Errorf("userRepo.Create: %w", err)
@@ -57,10 +57,10 @@ func (r *UserRepository) Create(ctx context.Context, u *model.User) error {
 func (r *UserRepository) CreateIfNoUsers(ctx context.Context, u *model.User) (bool, error) {
 	defer logger.DeferLogDuration("user.CreateIfNoUsers", time.Now())()
 	tag, err := r.pool.Exec(ctx,
-		`INSERT INTO users (id, username, email, phone, company, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
-		 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+		`INSERT INTO users (id, username, email, phone, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
+		 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		 WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1)`,
-		u.ID, u.Username, u.Email, u.Phone, u.Company, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
+		u.ID, u.Username, u.Email, u.Phone, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
 	)
 	if err != nil {
 		return false, fmt.Errorf("userRepo.CreateIfNoUsers: %w", err)
@@ -199,7 +199,7 @@ func (r *UserRepository) ListPage(ctx context.Context, q string, limit, offset i
 		case "status":
 			return fmt.Sprintf("CASE WHEN u.disabled_at IS NULL THEN 0 ELSE 1 END %s, u.username ASC, u.id ASC", dir)
 		case "role":
-			return fmt.Sprintf("CASE WHEN COALESCE(up.administrator,false) THEN 0 WHEN COALESCE(up.admin_all_groups,false) THEN 1 ELSE 2 END %s, u.username ASC, u.id ASC", dir)
+			return fmt.Sprintf("CASE WHEN COALESCE(up.administrator,false) THEN 0 ELSE 1 END %s, u.username ASC, u.id ASC", dir)
 		case "username", "":
 			fallthrough
 		default:
@@ -287,11 +287,11 @@ func (r *UserRepository) SetOnline(ctx context.Context, userID string, online bo
 	return nil
 }
 
-func (r *UserRepository) UpdateProfile(ctx context.Context, userID, username, avatarURL, email, phone, company, position string) error {
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID, username, avatarURL, email, phone, position string) error {
 	defer logger.DeferLogDuration("user.UpdateProfile", time.Now())()
 	_, err := r.pool.Exec(ctx,
-		`UPDATE users SET username = $1, avatar_url = $2, email = $3, phone = $4, company = $5, position = $6 WHERE id = $7`,
-		username, avatarURL, email, phone, company, position, userID,
+		`UPDATE users SET username = $1, avatar_url = $2, email = $3, phone = $4, position = $5 WHERE id = $6`,
+		username, avatarURL, email, phone, position, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("userRepo.UpdateProfile: %w", err)
@@ -344,7 +344,7 @@ func (r *UserRepository) RemoveFavorite(ctx context.Context, userID, chatID stri
 	return nil
 }
 
-// SetDisabled выставляет или снимает отключение пользователя (только для администратора через API).
+// SetDisabled 2Ñ‹AÑ‚02;O5Ñ‚ 8;8 A=8<05Ñ‚ >Ñ‚:;ÑŽÑ‡5=85 ?>;ÑŒ7>20Ñ‚5;O (Ñ‚>;ÑŒ:> 4;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0 Ñ‡5Ñ€57 API).
 func (r *UserRepository) SetDisabled(ctx context.Context, userID string, disabled bool) error {
 	defer logger.DeferLogDuration("user.SetDisabled", time.Now())()
 	if disabled {
@@ -359,4 +359,90 @@ func (r *UserRepository) SetDisabled(ctx context.Context, userID string, disable
 		}
 	}
 	return nil
+}
+
+// SetLoginKey replaces current login key metadata for the user.
+func (r *UserRepository) SetLoginKey(ctx context.Context, userID, keyHash string, generatedAt time.Time) error {
+	defer logger.DeferLogDuration("user.SetLoginKey", time.Now())()
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users
+		 SET login_key_hash = $1,
+		     login_key_attempts = 0,
+		     login_key_active = TRUE,
+		     login_key_generated_at = $2
+		 WHERE id = $3`,
+		keyHash, generatedAt.UTC(), userID,
+	)
+	if err != nil {
+		return fmt.Errorf("userRepo.SetLoginKey: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ConsumeLoginKeyAttempt atomically consumes one login-key attempt.
+// It guarantees race-safe increment and invalidation after maxAttempts.
+func (r *UserRepository) ConsumeLoginKeyAttempt(ctx context.Context, keyHash string, maxAttempts int) (*model.User, bool, error) {
+	defer logger.DeferLogDuration("user.ConsumeLoginKeyAttempt", time.Now())()
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, false, fmt.Errorf("userRepo.ConsumeLoginKeyAttempt begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var (
+		u        model.User
+		attempts int
+	)
+	row := tx.QueryRow(ctx,
+		`SELECT `+userCols+`, COALESCE(login_key_attempts, 0)
+		   FROM users
+		  WHERE login_key_active = TRUE AND login_key_hash = $1
+		  FOR UPDATE`,
+		keyHash,
+	)
+	if err := row.Scan(
+		&u.ID, &u.Username, &u.Email, &u.Phone, &u.Position, &u.PasswordHash, &u.AvatarURL, &u.LastSeenAt, &u.IsOnline, &u.CreatedAt, &u.DisabledAt,
+		&attempts,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("userRepo.ConsumeLoginKeyAttempt scan: %w", err)
+	}
+
+	nextAttempts := attempts + 1
+	exhausted := nextAttempts >= maxAttempts
+	if exhausted {
+		_, err = tx.Exec(ctx,
+			`UPDATE users
+			    SET login_key_hash = NULL,
+			        login_key_attempts = 0,
+			        login_key_active = FALSE,
+			        login_key_generated_at = NULL
+			  WHERE id = $1`,
+			u.ID,
+		)
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE users
+			    SET login_key_attempts = $1
+			  WHERE id = $2`,
+			nextAttempts, u.ID,
+		)
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("userRepo.ConsumeLoginKeyAttempt update: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, fmt.Errorf("userRepo.ConsumeLoginKeyAttempt commit: %w", err)
+	}
+	return &u, exhausted, nil
 }

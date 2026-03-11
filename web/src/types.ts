@@ -3,7 +3,6 @@ export interface UserPublic {
   username: string;
   email: string;
   phone: string;
-  company: string;
   position: string;
   avatar_url: string;
   is_online: boolean;

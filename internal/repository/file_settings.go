@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 )
 
 type FileSettings struct {

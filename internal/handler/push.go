@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/push"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/push"
 )
 
-// PushHandler обрабатывает подписку на пуш-уведомления (сессия обязательна).
+// PushHandler >1Ñ€010Ñ‚Ñ‹205Ñ‚ ?>4?8A:Ñƒ =0 ?ÑƒÑˆ-Ñƒ254><;5=8O (A5AA8O >1O70Ñ‚5;ÑŒ=0).
 type PushHandler struct {
 	client PushSubscriptionClient
 }
@@ -19,17 +19,17 @@ type PushSubscriptionClient interface {
 	Unsubscribe(ctx context.Context, userID, endpoint string) error
 }
 
-// NewPushHandler создаёт обработчик push.
+// NewPushHandler A>740Ñ‘Ñ‚ >1Ñ€01>Ñ‚Ñ‡8: push.
 func NewPushHandler(client PushSubscriptionClient) *PushHandler {
 	return &PushHandler{client: client}
 }
 
-// SubscribeRequest — тело от фронта (subscription из PushManager.getSubscription()).
+// SubscribeRequest â€” Ñ‚5;> >Ñ‚ Ñ„Ñ€>=Ñ‚0 (subscription 87 PushManager.getSubscription()).
 type SubscribeRequest struct {
 	Subscription push.PushSubscription `json:"subscription"`
 }
 
-// Subscribe сохраняет подписку на push-сервисе для текущего пользователя.
+// Subscribe A>Ñ…Ñ€0=O5Ñ‚ ?>4?8A:Ñƒ =0 push-A5Ñ€28A5 4;O Ñ‚5:ÑƒÑ‰53> ?>;ÑŒ7>20Ñ‚5;O.
 func (h *PushHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.client == nil {
 		writeError(w, http.StatusServiceUnavailable, "push service disabled")
@@ -56,12 +56,12 @@ func (h *PushHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UnsubscribeRequest — тело для отписки по endpoint.
+// UnsubscribeRequest â€” Ñ‚5;> 4;O >Ñ‚?8A:8 ?> endpoint.
 type UnsubscribeRequest struct {
 	Endpoint string `json:"endpoint"`
 }
 
-// Unsubscribe удаляет подписку.
+// Unsubscribe Ñƒ40;O5Ñ‚ ?>4?8A:Ñƒ.
 func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	if h == nil || h.client == nil {
 		writeError(w, http.StatusServiceUnavailable, "push service disabled")

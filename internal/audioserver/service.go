@@ -12,10 +12,10 @@ import (
 	"unicode"
 
 	"github.com/google/uuid"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 )
 
-// Разрешённые расширения и MIME для голосовых сообщений (как в Telegram: opus/webm, ogg, m4a).
+//  07Ñ€5ÑˆÑ‘==Ñ‹5 Ñ€0AÑˆ8Ñ€5=8O 8 MIME 4;O 3>;>A>2Ñ‹Ñ… A>>1Ñ‰5=89 (:0: 2 Telegram: opus/webm, ogg, m4a).
 var allowedExt = map[string]bool{
 	".ogg": true, ".oga": true, ".webm": true, ".m4a": true, ".mp4": true,
 }
@@ -28,7 +28,7 @@ var allowedMime = map[string]bool{
 
 const maxUploadSize = 25 << 20 // 25 MB
 
-// UploadResponse — ответ после успешной загрузки.
+// UploadResponse â€” >Ñ‚25Ñ‚ ?>A;5 ÑƒA?5Ñˆ=>9 703Ñ€Ñƒ7:8.
 type UploadResponse struct {
 	URL         string `json:"url"`
 	FileName    string `json:"file_name"`
@@ -36,13 +36,13 @@ type UploadResponse struct {
 	ContentType string `json:"content_type"`
 }
 
-// Service обрабатывает загрузку и раздачу голосовых сообщений.
+// Service >1Ñ€010Ñ‚Ñ‹205Ñ‚ 703Ñ€Ñƒ7:Ñƒ 8 Ñ€0740Ñ‡Ñƒ 3>;>A>2Ñ‹Ñ… A>>1Ñ‰5=89.
 type Service struct {
 	UploadDir     string
 	MaxUploadSize int64
 }
 
-// New создаёт сервис с заданным каталогом и лимитом размера (в байтах).
+// New A>740Ñ‘Ñ‚ A5Ñ€28A A 7040==Ñ‹< :0Ñ‚0;>3>< 8 ;8<8Ñ‚>< Ñ€07<5Ñ€0 (2 109Ñ‚0Ñ…).
 func New(uploadDir string, maxSize int64) *Service {
 	if maxSize <= 0 || maxSize > maxUploadSize {
 		maxSize = maxUploadSize
@@ -75,7 +75,7 @@ func safeFilename(name string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// Upload обрабатывает POST multipart/form-data с полем "file" (только аудио).
+// Upload >1Ñ€010Ñ‚Ñ‹205Ñ‚ POST multipart/form-data A ?>;5< "file" (Ñ‚>;ÑŒ:> 0Ñƒ48>).
 func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	r.Body = http.MaxBytesReader(w, r.Body, s.MaxUploadSize)
@@ -94,7 +94,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Нормализация имени: пробел мог прийти как "+"
+	// >Ñ€<0;870Ñ†8O 8<5=8: ?Ñ€>15; <>3 ?Ñ€89Ñ‚8 :0: "+"
 	rawFilename := strings.ReplaceAll(header.Filename, "+", " ")
 	ext := strings.ToLower(filepath.Ext(rawFilename))
 	if !allowedExt[ext] {
@@ -112,7 +112,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "only audio content type allowed")
 		return
 	}
-	// Если Content-Type пустой — полагаемся на расширение (часть браузеров не выставляет тип у части)
+	// Ð•A;8 Content-Type ?ÑƒAÑ‚>9 â€” ?>;0305<AO =0 Ñ€0AÑˆ8Ñ€5=85 (Ñ‡0AÑ‚ÑŒ 1Ñ€0Ñƒ75Ñ€>2 =5 2Ñ‹AÑ‚02;O5Ñ‚ Ñ‚8? Ñƒ Ñ‡0AÑ‚8)
 
 	newName := uuid.New().String() + ext
 	if err := os.MkdirAll(s.UploadDir, 0o755); err != nil {
@@ -183,7 +183,7 @@ func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, 
 	}
 }
 
-// Serve отдаёт файл по имени (для воспроизведения).
+// Serve >Ñ‚40Ñ‘Ñ‚ Ñ„09; ?> 8<5=8 (4;O 2>A?Ñ€>872545=8O).
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, filename string) {
 	if filename == "" || strings.Contains(filename, "..") || strings.Contains(filename, "/") {
 		http.Error(w, "not found", http.StatusNotFound)

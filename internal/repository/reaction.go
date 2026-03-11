@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
 )
 
 type ReactionRepository struct {

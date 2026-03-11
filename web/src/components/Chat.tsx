@@ -150,6 +150,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
   const [text, setText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadKind, setUploadKind] = useState<'file' | 'voice' | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recordingLocked, setRecordingLocked] = useState(false);
   const [recordingCancelArmed, setRecordingCancelArmed] = useState(false);
@@ -500,13 +502,17 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeChatId) return;
+    setUploadKind('file');
+    setUploadProgress(0);
     setUploading(true);
     try {
-      const r = await uploadFile(file);
+      const r = await uploadFile(file, { onProgress: (percent) => setUploadProgress(percent) });
       const displayName = normalizeFileDisplayName(r.file_name) || file.name.replace(/\+/g, ' ').trim() || file.name;
       sendMessage(activeChatId, file.name, { contentType: r.content_type, fileUrl: r.url, fileName: displayName, fileSize: r.file_size });
     } catch { /* */ }
     setUploading(false);
+    setUploadKind(null);
+    setUploadProgress(0);
     if (fileRef.current) fileRef.current.value = '';
   }, [activeChatId, uploadFile, sendMessage]);
 
@@ -529,6 +535,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
         if (wasCancelled) {
           recordedChunksRef.current = [];
           setUploading(false);
+          setUploadKind(null);
+          setUploadProgress(0);
           return;
         }
         const blob = new Blob(recordedChunksRef.current, { type: mime });
@@ -538,7 +546,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           const file = new File([blob], `voice-${Date.now()}${ext}`, { type: mime.split(';')[0] });
           const { optId, clientMsgId } = addOptimisticVoiceMessage(chatId);
           try {
-            const r = await uploadVoice(file);
+            const r = await uploadVoice(file, { onProgress: (percent) => setUploadProgress(percent) });
             updateOptimisticVoiceMessage(chatId, optId, { fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size });
             sendMessageWsOnly(chatId, 'Голосовое сообщение', { contentType: 'voice', fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size, clientMsgId });
           } catch (e: unknown) {
@@ -549,6 +557,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           }
         } finally {
           setUploading(false);
+          setUploadKind(null);
+          setUploadProgress(0);
         }
       };
       mediaRecorderRef.current = recorder;
@@ -573,7 +583,11 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     mediaRecorderRef.current = null;
     if (recorder?.state === 'recording') {
       recordingCancelledRef.current = !send;
-      if (send) setUploading(true);
+      if (send) {
+        setUploadKind('voice');
+        setUploadProgress(0);
+        setUploading(true);
+      }
       try {
         recorder.requestData();
       } catch { /* */ }
@@ -968,11 +982,28 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
         </div>
       )}
 
-      {/* Sending voice overlay */}
+      {/* Upload overlay */}
       {uploading && !recording && (
-        <div className="shrink-0 px-4 py-2 flex items-center gap-2 bg-surface dark:bg-dark-elevated border-t border-surface-border dark:border-dark-border">
+        <div className="shrink-0 px-4 py-2 bg-surface dark:bg-dark-elevated border-t border-surface-border dark:border-dark-border">
+          <div className="flex items-center gap-2">
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-          <span className="text-[13px] text-txt-secondary dark:text-[#8b98a5]">Отправка голосового...</span>
+            <span className="text-[13px] text-txt-secondary dark:text-[#8b98a5]">
+              {uploadKind === 'file' ? 'Отправка файла...' : 'Отправка голосового...'}
+            </span>
+            {uploadKind === 'file' && (
+              <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] tabular-nums">{Math.max(0, Math.min(100, Math.round(uploadProgress)))}%</span>
+            )}
+          </div>
+          <div className="mt-1.5 h-1.5 rounded-full bg-surface-border dark:bg-dark-border overflow-hidden">
+            {uploadKind === 'file' ? (
+              <div
+                className="h-full bg-primary transition-[width] duration-150"
+                style={{ width: `${Math.max(2, Math.min(100, uploadProgress || 0))}%` }}
+              />
+            ) : (
+              <div className="h-full w-1/3 bg-primary/80 animate-pulse" />
+            )}
+          </div>
         </div>
       )}
 

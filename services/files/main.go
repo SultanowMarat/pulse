@@ -1,4 +1,4 @@
-// Микросервис загрузки и раздачи файлов (upload + serve).
+// Ðœ8:Ñ€>A5Ñ€28A 703Ñ€Ñƒ7:8 8 Ñ€0740Ñ‡8 Ñ„09;>2 (upload + serve).
 package main
 
 import (
@@ -15,8 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/messenger/internal/fileserver"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/fileserver"
+	"github.com/pulse/internal/logger"
 )
 
 func main() {

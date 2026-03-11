@@ -1,6 +1,8 @@
-# Files: только загрузка/раздача файлов, без исходящего HTTPS — без ca-certificates
+# Files: Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð·Ð°Ð³Ñ€ÑƒÐ·ÐºÐ°/Ñ€Ð°Ð·Ð´Ð°Ñ‡Ð° Ñ„Ð°Ð¹Ð»Ð¾Ð², Ð±ÐµÐ· Ð¸ÑÑ…Ð¾Ð´ÑÑ‰ÐµÐ³Ð¾ HTTPS â€” Ð±ÐµÐ· ca-certificates
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
+ENV GOPROXY=direct GOSUMDB=off
+RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,id=go-mod \
   go mod download
@@ -16,4 +18,4 @@ COPY services/infra/entrypoint-log.sh /entrypoint-log.sh
 RUN chown appuser:appuser /app/fileserver && chmod +x /entrypoint-log.sh
 EXPOSE 8083
 ENTRYPOINT ["/entrypoint-log.sh"]
-CMD ["sh", "-c", "./fileserver 2>&1 | tee -a /var/log/messenger/app.log"]
+CMD ["sh", "-c", "./fileserver 2>&1 | tee -a /var/log/pulse/app.log"]

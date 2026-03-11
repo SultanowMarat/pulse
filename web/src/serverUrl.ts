@@ -4,7 +4,7 @@
  */
 
 /** Адрес сервера в десктоп-приложении (не показывается в UI, не хранится в localStorage). */
-const DEFAULT_PUBLIC_ORIGIN = 'https://buhchat.com';
+const DEFAULT_PUBLIC_ORIGIN = 'https://compass.chaphana.com';
 
 export function isDesktopApp(): boolean {
   return typeof window !== 'undefined' && !!(window as unknown as { electronAPI?: unknown }).electronAPI;

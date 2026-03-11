@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
 )
 
 type SessionRepository struct {
@@ -33,7 +33,7 @@ func (r *SessionRepository) Create(ctx context.Context, s *model.Session) error 
 	return nil
 }
 
-// UpsertByUserIDAndDeviceID вставляет сессию или обновляет существующую по (user_id, device_id). Устраняет duplicate key без отдельного DELETE.
+// UpsertByUserIDAndDeviceID 2AÑ‚02;O5Ñ‚ A5AA8ÑŽ 8;8 >1=>2;O5Ñ‚ AÑƒÑ‰5AÑ‚2ÑƒÑŽÑ‰ÑƒÑŽ ?> (user_id, device_id). #AÑ‚Ñ€0=O5Ñ‚ duplicate key 157 >Ñ‚45;ÑŒ=>3> DELETE.
 func (r *SessionRepository) UpsertByUserIDAndDeviceID(ctx context.Context, s *model.Session) error {
 	defer logger.DeferLogDuration("session.UpsertByUserIDAndDeviceID", time.Now())()
 	_, err := r.pool.Exec(ctx,
@@ -54,7 +54,7 @@ func (r *SessionRepository) UpsertByUserIDAndDeviceID(ctx context.Context, s *mo
 	return nil
 }
 
-// GetByID возвращает сессию только если она не отозвана (revoked_at IS NULL).
+// GetByID 2>72Ñ€0Ñ‰05Ñ‚ A5AA8ÑŽ Ñ‚>;ÑŒ:> 5A;8 >=0 =5 >Ñ‚>720=0 (revoked_at IS NULL).
 func (r *SessionRepository) GetByID(ctx context.Context, id string) (*model.Session, error) {
 	defer logger.DeferLogDuration("session.GetByID", time.Now())()
 	s := &model.Session{}
@@ -71,7 +71,7 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (*model.Sess
 	return s, nil
 }
 
-// ListByUserID — только активные сессии (revoked_at IS NULL).
+// ListByUserID â€” Ñ‚>;ÑŒ:> 0:Ñ‚82=Ñ‹5 A5AA88 (revoked_at IS NULL).
 func (r *SessionRepository) ListByUserID(ctx context.Context, userID string) ([]model.Session, error) {
 	defer logger.DeferLogDuration("session.ListByUserID", time.Now())()
 	rows, err := r.pool.Query(ctx,
@@ -98,7 +98,7 @@ func (r *SessionRepository) UpdateLastSeen(ctx context.Context, sessionID string
 	return err
 }
 
-// RevokeByID помечает сессию отозванной (revoked_at = NOW()). Для удаления секрета из Redis вызывающий код делает отдельно.
+// RevokeByID ?><5Ñ‡05Ñ‚ A5AA8ÑŽ >Ñ‚>720==>9 (revoked_at = NOW()). Ð”;O Ñƒ40;5=8O A5:Ñ€5Ñ‚0 87 Redis 2Ñ‹7Ñ‹20ÑŽÑ‰89 :>4 45;05Ñ‚ >Ñ‚45;ÑŒ=>.
 func (r *SessionRepository) RevokeByID(ctx context.Context, sessionID string) (bool, error) {
 	defer logger.DeferLogDuration("session.RevokeByID", time.Now())()
 	tag, err := r.pool.Exec(ctx, `UPDATE sessions SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, sessionID)
@@ -108,7 +108,7 @@ func (r *SessionRepository) RevokeByID(ctx context.Context, sessionID string) (b
 	return tag.RowsAffected() > 0, nil
 }
 
-// RevokeByUserID отзывает все сессии пользователя. Возвращает список id сессий для очистки Redis.
+// RevokeByUserID >Ñ‚7Ñ‹205Ñ‚ 2A5 A5AA88 ?>;ÑŒ7>20Ñ‚5;O. Ð’>72Ñ€0Ñ‰05Ñ‚ A?8A>: id A5AA89 4;O >Ñ‡8AÑ‚:8 Redis.
 func (r *SessionRepository) RevokeByUserID(ctx context.Context, userID string) ([]string, error) {
 	defer logger.DeferLogDuration("session.RevokeByUserID", time.Now())()
 	rows, err := r.pool.Query(ctx, `SELECT id FROM sessions WHERE user_id = $1 AND revoked_at IS NULL`, userID)
@@ -143,21 +143,21 @@ func (r *SessionRepository) Delete(ctx context.Context, sessionID string) error 
 	return err
 }
 
-// RevokeByUserIDAndDeviceID отзывает сессию для пары (user_id, device_id).
+// RevokeByUserIDAndDeviceID >Ñ‚7Ñ‹205Ñ‚ A5AA8ÑŽ 4;O ?0Ñ€Ñ‹ (user_id, device_id).
 func (r *SessionRepository) RevokeByUserIDAndDeviceID(ctx context.Context, userID, deviceID string) error {
 	defer logger.DeferLogDuration("session.RevokeByUserIDAndDeviceID", time.Now())()
 	_, err := r.pool.Exec(ctx, `UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL`, userID, deviceID)
 	return err
 }
 
-// DeleteByUserIDAndDeviceID удаляет строку сессии для (user_id, device_id). Нужно перед INSERT из-за UNIQUE(user_id, device_id).
+// DeleteByUserIDAndDeviceID Ñƒ40;O5Ñ‚ AÑ‚Ñ€>:Ñƒ A5AA88 4;O (user_id, device_id). Ñƒ6=> ?5Ñ€54 INSERT 87-70 UNIQUE(user_id, device_id).
 func (r *SessionRepository) DeleteByUserIDAndDeviceID(ctx context.Context, userID, deviceID string) error {
 	defer logger.DeferLogDuration("session.DeleteByUserIDAndDeviceID", time.Now())()
 	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1 AND device_id = $2`, userID, deviceID)
 	return err
 }
 
-// DeleteByUserIDAndSessionID отзывает одну сессию пользователя (revoked_at = NOW()).
+// DeleteByUserIDAndSessionID >Ñ‚7Ñ‹205Ñ‚ >4=Ñƒ A5AA8ÑŽ ?>;ÑŒ7>20Ñ‚5;O (revoked_at = NOW()).
 func (r *SessionRepository) DeleteByUserIDAndSessionID(ctx context.Context, userID, sessionID string) (bool, error) {
 	defer logger.DeferLogDuration("session.DeleteByUserIDAndSessionID", time.Now())()
 	tag, err := r.pool.Exec(ctx, `UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND id = $2 AND revoked_at IS NULL`, userID, sessionID)
@@ -167,14 +167,14 @@ func (r *SessionRepository) DeleteByUserIDAndSessionID(ctx context.Context, user
 	return tag.RowsAffected() > 0, nil
 }
 
-// SetSessionSecret сохраняет session_secret для сессии (используется в -dev для сохранения сессий после перезапуска).
+// SetSessionSecret A>Ñ…Ñ€0=O5Ñ‚ session_secret 4;O A5AA88 (8A?>;ÑŒ7Ñƒ5Ñ‚AO 2 -dev 4;O A>Ñ…Ñ€0=5=8O A5AA89 ?>A;5 ?5Ñ€570?ÑƒA:0).
 func (r *SessionRepository) SetSessionSecret(ctx context.Context, sessionID, secret string) error {
 	defer logger.DeferLogDuration("session.SetSessionSecret", time.Now())()
 	_, err := r.pool.Exec(ctx, `UPDATE sessions SET session_secret = $1 WHERE id = $2 AND revoked_at IS NULL`, secret, sessionID)
 	return err
 }
 
-// GetSessionSecret возвращает session_secret для сессии (пусто если колонка NULL).
+// GetSessionSecret 2>72Ñ€0Ñ‰05Ñ‚ session_secret 4;O A5AA88 (?ÑƒAÑ‚> 5A;8 :>;>=:0 NULL).
 func (r *SessionRepository) GetSessionSecret(ctx context.Context, sessionID string) (string, error) {
 	defer logger.DeferLogDuration("session.GetSessionSecret", time.Now())()
 	var secret *string
@@ -191,7 +191,7 @@ func (r *SessionRepository) GetSessionSecret(ctx context.Context, sessionID stri
 	return *secret, nil
 }
 
-// ClearSessionSecret обнуляет session_secret при выходе/отзыве (для -dev).
+// ClearSessionSecret >1=Ñƒ;O5Ñ‚ session_secret ?Ñ€8 2Ñ‹Ñ…>45/>Ñ‚7Ñ‹25 (4;O -dev).
 func (r *SessionRepository) ClearSessionSecret(ctx context.Context, sessionID string) error {
 	defer logger.DeferLogDuration("session.ClearSessionSecret", time.Now())()
 	_, err := r.pool.Exec(ctx, `UPDATE sessions SET session_secret = NULL WHERE id = $1`, sessionID)

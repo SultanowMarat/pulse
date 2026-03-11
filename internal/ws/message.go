@@ -3,7 +3,7 @@ package ws
 import (
 	"time"
 
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/model"
 )
 
 type EventType string

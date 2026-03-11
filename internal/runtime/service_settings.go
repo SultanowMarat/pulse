@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/messenger/internal/model"
+	"github.com/pulse/internal/model"
 )
 
 // Atomic runtime settings snapshot.

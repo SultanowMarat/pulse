@@ -7,7 +7,6 @@ type User struct {
 	Username     string     `json:"username"`
 	Email        string     `json:"email"`
 	Phone        string     `json:"phone"`
-	Company      string     `json:"company"`
 	Position     string     `json:"position"`
 	PasswordHash string     `json:"-"`
 	AvatarURL    string     `json:"avatar_url"`
@@ -22,7 +21,6 @@ type UserPublic struct {
 	Username   string     `json:"username"`
 	Email      string     `json:"email"`
 	Phone      string     `json:"phone"`
-	Company    string     `json:"company"`
 	Position   string     `json:"position"`
 	AvatarURL  string     `json:"avatar_url"`
 	IsOnline   bool       `json:"is_online"`
@@ -36,7 +34,6 @@ func (u *User) ToPublic() UserPublic {
 		Username:   u.Username,
 		Email:      u.Email,
 		Phone:      u.Phone,
-		Company:    u.Company,
 		Position:   u.Position,
 		AvatarURL:  u.AvatarURL,
 		IsOnline:   u.IsOnline,

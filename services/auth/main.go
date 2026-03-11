@@ -1,4 +1,4 @@
-// Микросервис авторизации: OTP по email, сессии устройств.
+// Ðœ8:Ñ€>A5Ñ€28A 02Ñ‚>Ñ€870Ñ†88: OTP ?> email, A5AA88 ÑƒAÑ‚Ñ€>9AÑ‚2.
 package main
 
 import (
@@ -16,15 +16,15 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/messenger/internal/config"
-	"github.com/messenger/internal/handler"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/service"
-	"github.com/messenger/internal/startup"
-	"github.com/messenger/internal/storage"
-	"github.com/messenger/internal/storage/devstore"
+	"github.com/pulse/internal/config"
+	"github.com/pulse/internal/handler"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/service"
+	"github.com/pulse/internal/startup"
+	"github.com/pulse/internal/storage"
+	"github.com/pulse/internal/storage/devstore"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 
 	logger.Info("starting auth service")
 	cfg := config.Load()
-	logger.Info("SMTP для OTP управляется из админ-панели приложения")
+	logger.Info("SMTP 4;O OTP Ñƒ?Ñ€02;O5Ñ‚AO 87 04<8=-?0=5;8 ?Ñ€8;>65=8O")
 
 	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL())
 	if err != nil {
@@ -52,7 +52,7 @@ func main() {
 
 	var store storage.SessionOTPStore
 	if *dev {
-		logger.Info("auth -dev: using DB for session_secret (сессии сохраняются после перезапуска)")
+		logger.Info("auth -dev: using DB for session_secret (A5AA88 A>Ñ…Ñ€0=OÑŽÑ‚AO ?>A;5 ?5Ñ€570?ÑƒA:0)")
 		store = devstore.New(sessionRepo)
 	} else {
 		redisClient := startup.ConnectRedisWithRetry(cfg.Redis.URL, 60*time.Second, "auth: ")

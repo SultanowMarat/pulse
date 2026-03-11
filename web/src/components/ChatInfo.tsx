@@ -344,7 +344,7 @@ function MemberRow({ member, isMe, online, role, roleColor, onUserClick, action 
       <Avatar name={member.username} url={member.avatar_url || undefined} size={40} online={online} />
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-semibold text-txt dark:text-[#e7e9ea] truncate">{member.username}{isMe && ' (вы)'}</p>
-        <p className="text-[11px] text-txt-secondary dark:text-[#8b98a5]">Пользователь BuhChat</p>
+        <p className="text-[11px] text-txt-secondary dark:text-[#8b98a5]">Пользователь pulse</p>
       </div>
       {role && (
         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white ${roleColor || 'bg-primary'}`}>

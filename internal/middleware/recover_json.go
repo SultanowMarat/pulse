@@ -6,11 +6,11 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 )
 
 // responseWriter wraps http.ResponseWriter to detect if the response was already written.
-// Реализует http.Hijacker для поддержки WebSocket upgrade.
+//  50;87Ñƒ5Ñ‚ http.Hijacker 4;O ?>445Ñ€6:8 WebSocket upgrade.
 type responseWriter struct {
 	http.ResponseWriter
 	status int
@@ -26,7 +26,7 @@ func (w *responseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
-// Hijack делегирует к нижележащему ResponseWriter, если он реализует http.Hijacker (нужно для WebSocket).
+// Hijack 45;538Ñ€Ñƒ5Ñ‚ : =865;560Ñ‰5<Ñƒ ResponseWriter, 5A;8 >= Ñ€50;87Ñƒ5Ñ‚ http.Hijacker (=Ñƒ6=> 4;O WebSocket).
 func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
 		return h.Hijack()
@@ -34,7 +34,7 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, http.ErrNotSupported
 }
 
-// RecoverJSON при панике в handler логирует её и отдаёт клиенту JSON 500 (если ответ ещё не отправлен).
+// RecoverJSON ?Ñ€8 ?0=8:5 2 handler ;>38Ñ€Ñƒ5Ñ‚ 5Ñ‘ 8 >Ñ‚40Ñ‘Ñ‚ :;85=Ñ‚Ñƒ JSON 500 (5A;8 >Ñ‚25Ñ‚ 5Ñ‰Ñ‘ =5 >Ñ‚?Ñ€02;5=).
 func RecoverJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wrap := &responseWriter{ResponseWriter: w, status: http.StatusOK}

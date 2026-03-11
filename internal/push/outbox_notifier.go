@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/messenger/internal/broker"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/broker"
+	"github.com/pulse/internal/logger"
 )
 
 type outboxWriter interface {

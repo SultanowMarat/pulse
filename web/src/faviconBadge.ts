@@ -1,8 +1,9 @@
-/**
- * Обновление фавикона с бейджем количества непрочитанных (как в Telegram).
+﻿/**
+ * ÐžÐ±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ðµ Ñ„Ð°Ð²Ð¸ÐºÐ¾Ð½Ð° Ñ Ð±ÐµÐ¹Ð´Ð¶ÐµÐ¼ ÐºÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð° Ð½ÐµÐ¿Ñ€Ð¾Ñ‡Ð¸Ñ‚Ð°Ð½Ð½Ñ‹Ñ… (ÐºÐ°Ðº Ð² Telegram).
  */
-const DEFAULT_FAVICON = '/icons/icon-192.png';
-const ICON_SOURCE = '/icons/icon-192.png';
+const ICON_VERSION = '20260311-6';
+const DEFAULT_FAVICON = `/icons/icon-192.png?v=${ICON_VERSION}`;
+const ICON_SOURCE = `/icons/icon-192.png?v=${ICON_VERSION}`;
 const SIZE = 32;
 const BADGE_RADIUS = 10;
 const BADGE_COLOR = '#ef4444';
@@ -67,3 +68,4 @@ export function updateFaviconBadge(total: number): void {
   img.onerror = () => restoreFavicon();
   img.src = ICON_SOURCE;
 }
+

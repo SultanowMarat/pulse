@@ -133,7 +133,6 @@ CREATE TABLE IF NOT EXISTS user_permissions (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     administrator BOOLEAN NOT NULL DEFAULT FALSE,
     member BOOLEAN NOT NULL DEFAULT TRUE,
-    admin_all_groups BOOLEAN NOT NULL DEFAULT FALSE,
     delete_others_messages BOOLEAN NOT NULL DEFAULT FALSE,
     manage_bots BOOLEAN NOT NULL DEFAULT FALSE,
     edit_others_profile BOOLEAN NOT NULL DEFAULT FALSE,
@@ -143,6 +142,7 @@ CREATE TABLE IF NOT EXISTS user_permissions (
 );
 ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS administrator BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS member BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE user_permissions DROP COLUMN IF EXISTS admin_all_groups;
 
 -- Global mail (SMTP) settings used by OTP auth and admin test-mail.
 CREATE TABLE IF NOT EXISTS app_mail_settings (

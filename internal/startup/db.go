@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 )
 
-// ConnectDBWithRetry подключается к Postgres с повторами; при недоступности БД не роняет процесс сразу.
-// logPrefix добавляется к сообщениям лога (например "auth: ").
+// ConnectDBWithRetry ?>4:;ÑŽÑ‡05Ñ‚AO : Postgres A ?>2Ñ‚>Ñ€0<8; ?Ñ€8 =54>AÑ‚Ñƒ?=>AÑ‚8 Ð‘Ð” =5 Ñ€>=O5Ñ‚ ?Ñ€>Ñ†5AA AÑ€07Ñƒ.
+// logPrefix 4>102;O5Ñ‚AO : A>>1Ñ‰5=8O< ;>30 (=0?Ñ€8<5Ñ€ "auth: ").
 func ConnectDBWithRetry(poolCfg *pgxpool.Config, maxWait time.Duration, logPrefix string) *pgxpool.Pool {
 	deadline := time.Now().Add(maxWait)
 	backoff := 2 * time.Second

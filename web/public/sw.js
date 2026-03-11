@@ -1,4 +1,12 @@
-/* Service Worker: push для PWA BuhChat (Windows/macOS/Linux/mobile) */
+﻿/* Service Worker: push для PWA pulse (Windows/macOS/Linux/mobile) */
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 function buildAbsoluteUrl(path) {
   try {
@@ -19,27 +27,26 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'BuhChat', body: event.data.text() || 'Новое уведомление' };
+    payload = { title: 'pulse', body: event.data.text() || 'Новое уведомление' };
   }
 
   const data = payload.data || {};
-  const title = payload.title || 'BuhChat';
+  const title = payload.title || 'pulse';
   const body = payload.body || '';
   const tag = data.message_id ? `msg-${data.message_id}` : `chat-${data.chat_id || 'common'}`;
 
   const options = {
     body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icons/icon-192.png?v=20260311-6',
+    badge: '/icons/icon-192.png?v=20260311-6',
     tag,
     renotify: true,
     requireInteraction: true,
     timestamp: Date.now(),
     data: { url: buildMessageUrl(data), ...data },
-    actions: [
-      { action: 'open', title: 'Открыть' },
-    ],
+    actions: [{ action: 'open', title: 'Открыть' }],
   };
+
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
@@ -71,3 +78,4 @@ self.addEventListener('pushsubscriptionchange', (event) => {
     })
   );
 });
+

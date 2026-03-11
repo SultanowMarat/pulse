@@ -10,17 +10,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/messenger/internal/config"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/config"
+	"github.com/pulse/internal/logger"
 )
 
-// AudioHandler проксирует загрузку и раздачу голосовых сообщений в микросервис audio.
+// AudioHandler ?Ñ€>:A8Ñ€Ñƒ5Ñ‚ 703Ñ€Ñƒ7:Ñƒ 8 Ñ€0740Ñ‡Ñƒ 3>;>A>2Ñ‹Ñ… A>>1Ñ‰5=89 2 <8:Ñ€>A5Ñ€28A audio.
 type AudioHandler struct {
 	audioClient *http.Client
 	audioBase   string
 }
 
-// NewAudioHandler создаёт handler, проксирующий в аудио-сервис. Если audioServiceURL пустой — возвращается nil.
+// NewAudioHandler A>740Ñ‘Ñ‚ handler, ?Ñ€>:A8Ñ€ÑƒÑŽÑ‰89 2 0Ñƒ48>-A5Ñ€28A. Ð•A;8 audioServiceURL ?ÑƒAÑ‚>9 â€” 2>72Ñ€0Ñ‰05Ñ‚AO nil.
 func NewAudioHandler(cfg *config.Config) *AudioHandler {
 	if cfg.AudioServiceURL == "" {
 		return nil
@@ -31,7 +31,7 @@ func NewAudioHandler(cfg *config.Config) *AudioHandler {
 	}
 }
 
-// Upload проксирует POST на микросервис audio (multipart "file").
+// Upload ?Ñ€>:A8Ñ€Ñƒ5Ñ‚ POST =0 <8:Ñ€>A5Ñ€28A audio (multipart "file").
 func (h *AudioHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	proxyURL := h.audioBase + "/upload"
 	proxyReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, proxyURL, nil)
@@ -76,7 +76,7 @@ func (h *AudioHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-// Serve проксирует GET на микросервис audio (раздача файла по имени).
+// Serve ?Ñ€>:A8Ñ€Ñƒ5Ñ‚ GET =0 <8:Ñ€>A5Ñ€28A audio (Ñ€0740Ñ‡0 Ñ„09;0 ?> 8<5=8).
 func (h *AudioHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	filename := filepath.Base(chi.URLParam(r, "filename"))
 	if filename == "" || strings.Contains(filename, "..") {

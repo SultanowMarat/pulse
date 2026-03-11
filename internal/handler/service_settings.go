@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/runtime"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/runtime"
 )
 
 type ServiceSettingsHandler struct {

@@ -4,7 +4,11 @@
  */
 import { getPushConfig, pushSubscribe, pushUnsubscribe, type PushSubscriptionJson } from '../api';
 
-const SW_PATH = '/sw.js';
+const APP_VERSION =
+  (typeof document !== 'undefined' &&
+    document.querySelector('meta[name="pulse-app-version"]')?.getAttribute('content')) ||
+  'dev';
+const SW_PATH = `/sw.js?v=${encodeURIComponent(APP_VERSION)}`;
 const RECHECK_DELAY_MS = 1200;
 let registerInFlight: Promise<void> | null = null;
 

@@ -1,4 +1,4 @@
-// Микросервис загрузки и раздачи голосовых сообщений (как в Telegram).
+// Ðœ8:Ñ€>A5Ñ€28A 703Ñ€Ñƒ7:8 8 Ñ€0740Ñ‡8 3>;>A>2Ñ‹Ñ… A>>1Ñ‰5=89 (:0: 2 Telegram).
 package main
 
 import (
@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/messenger/internal/audioserver"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/audioserver"
+	"github.com/pulse/internal/logger"
 )
 
 func main() {

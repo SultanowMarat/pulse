@@ -1,4 +1,4 @@
-// Микросервис пуш-уведомлений (Web Push): подписки в Redis, отправка через VAPID.
+// Ðœ8:Ñ€>A5Ñ€28A ?ÑƒÑˆ-Ñƒ254><;5=89 (Web Push): ?>4?8A:8 2 Redis, >Ñ‚?Ñ€02:0 Ñ‡5Ñ€57 VAPID.
 package main
 
 import (
@@ -18,9 +18,9 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/messenger/internal/broker"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/push"
+	"github.com/pulse/internal/broker"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/push"
 )
 
 const (
@@ -109,11 +109,11 @@ func main() {
 			cfg.VAPIDPublicKey = keys.PublicKey
 			cfg.VAPIDPrivateKey = keys.PrivateKey
 		} else {
-			logger.Infof("VAPID: не удалось загрузить/сгенерировать ключи: %v — push отключены", err)
+			logger.Infof("VAPID: =5 Ñƒ40;>AÑŒ 703Ñ€Ñƒ78Ñ‚ÑŒ/A35=5Ñ€8Ñ€>20Ñ‚ÑŒ :;ÑŽÑ‡8: %v â€” push >Ñ‚:;ÑŽÑ‡5=Ñ‹", err)
 		}
 	}
 	if cfg.VAPIDPublicKey == "" || cfg.VAPIDPrivateKey == "" {
-		logger.Info("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY not set — push-уведомления отключены (подписки сохраняются, отправка не выполняется)")
+		logger.Info("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY not set â€” push-Ñƒ254><;5=8O >Ñ‚:;ÑŽÑ‡5=Ñ‹ (?>4?8A:8 A>Ñ…Ñ€0=OÑŽÑ‚AO, >Ñ‚?Ñ€02:0 =5 2Ñ‹?>;=O5Ñ‚AO)")
 	}
 
 	opts, err := redis.ParseURL(cfg.RedisURL)
@@ -135,7 +135,7 @@ func main() {
 	var vapidOpts *webpush.Options
 	if cfg.VAPIDPublicKey != "" && cfg.VAPIDPrivateKey != "" {
 		vapidOpts = &webpush.Options{
-			Subscriber:      "messenger-push",
+			Subscriber:      "pulse-push",
 			VAPIDPublicKey:  cfg.VAPIDPublicKey,
 			VAPIDPrivateKey: cfg.VAPIDPrivateKey,
 			TTL:             30,

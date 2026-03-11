@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/messenger/internal/cache"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/ws"
+	"github.com/pulse/internal/cache"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/ws"
 )
 
 type ChatHandler struct {
@@ -185,8 +185,8 @@ func (h *ChatHandler) GetUserChats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := middleware.GetUserID(ctx)
 
-	// Service group "Общий чат": ensure every user is a member on first login.
-	// This guarantees the chat appears in the "ВСЕ" tab for everyone.
+	// Service group "Ðž1Ñ‰89 Ñ‡0Ñ‚": ensure every user is a member on first login.
+	// This guarantees the chat appears in the "Ð’!Ð•" tab for everyone.
 	if err := h.ensureGeneralChatMember(ctx, userID); err != nil {
 		logger.Errorf("GetUserChats ensure general chat: %v", err)
 	}
@@ -253,7 +253,7 @@ func (h *ChatHandler) ensureGeneralChatMember(ctx context.Context, userID string
 		ID:          uuid.New().String(),
 		ChatID:      chat.ID,
 		SenderID:    userID,
-		Content:     "Добавлен пользователь " + name,
+		Content:     "Ð”>102;5= ?>;ÑŒ7>20Ñ‚5;ÑŒ " + name,
 		ContentType: model.ContentTypeSystem,
 		Status:      model.MessageStatusSent,
 		CreatedAt:   now,
@@ -444,7 +444,7 @@ func (h *ChatHandler) UpdateChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// System "Общий чат" can only be edited by global administrators.
+	// System "Ðž1Ñ‰89 Ñ‡0Ñ‚" can only be edited by global administrators.
 	if chat.SystemKey == repository.GeneralChatSystemKey {
 		perm, err := h.permRepo.GetByUserID(r.Context(), userID)
 		if err != nil || perm == nil || !perm.Administrator {
@@ -608,7 +608,7 @@ func (h *ChatHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 
 	for _, uid := range addedIDs {
 		addedName := addedNames[uid]
-		systemContent := actorName + " добавил(а) " + addedName + " в группу"
+		systemContent := actorName + " 4>1028;(0) " + addedName + " 2 3Ñ€Ñƒ??Ñƒ"
 		sysMsg := &model.Message{
 			ID:          uuid.New().String(),
 			ChatID:      chatID,
@@ -697,7 +697,7 @@ func (h *ChatHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		actorName = actor.Username
 	}
 	now := time.Now().UTC()
-	sysContent := actorName + " исключил(а) " + removedName + " из группы"
+	sysContent := actorName + " 8A:;ÑŽÑ‡8;(0) " + removedName + " 87 3Ñ€Ñƒ??Ñ‹"
 	sysMsg := &model.Message{
 		ID:          uuid.New().String(),
 		ChatID:      chatID,
@@ -769,7 +769,7 @@ func (h *ChatHandler) LeaveChat(w http.ResponseWriter, r *http.Request) {
 		leaverName = leaver.Username
 	}
 	now := time.Now().UTC()
-	sysContent := leaverName + " покинул(а) группу"
+	sysContent := leaverName + " ?>:8=Ñƒ;(0) 3Ñ€Ñƒ??Ñƒ"
 	sysMsg := &model.Message{
 		ID:          uuid.New().String(),
 		ChatID:      chatID,

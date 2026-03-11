@@ -12,12 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/storage"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/storage"
 )
 
-const TimestampSkew = 30 * time.Second
+// Allow wider clock skew to avoid false 401 on clients with unsynced time (common on some Windows 10 setups).
+const TimestampSkew = 10 * time.Minute
 
 func SessionAuth(sessionRepo *repository.SessionRepository, store storage.SessionOTPStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -57,7 +58,7 @@ func SessionAuth(sessionRepo *repository.SessionRepository, store storage.Sessio
 				}
 				r.Body = io.NopCloser(bytes.NewReader(body))
 			}
-			// session_secret хранится в store (Redis или in-memory в -dev).
+			// session_secret Ñ…Ñ€0=8Ñ‚AO 2 store (Redis 8;8 in-memory 2 -dev).
 			secretB64, err := store.GetSessionSecret(r.Context(), sessionID)
 			if err != nil || secretB64 == "" {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)

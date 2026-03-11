@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/messenger/internal/config"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/config"
+	"github.com/pulse/internal/repository"
 )
 
-// ConfigHandler отдаёт публичные параметры конфигурации (например, кеш для клиента).
+// ConfigHandler >Ñ‚40Ñ‘Ñ‚ ?Ñƒ1;8Ñ‡=Ñ‹5 ?0Ñ€0<5Ñ‚Ñ€Ñ‹ :>=Ñ„83ÑƒÑ€0Ñ†88 (=0?Ñ€8<5Ñ€, :5Ñˆ 4;O :;85=Ñ‚0).
 type ConfigHandler struct {
 	cfg              *config.Config
 	fileSettingsRepo *repository.FileSettingsRepository
@@ -17,19 +17,19 @@ type ConfigHandler struct {
 	generatedAt      time.Time
 }
 
-// NewConfigHandler создаёт обработчик конфигурации.
+// NewConfigHandler A>740Ñ‘Ñ‚ >1Ñ€01>Ñ‚Ñ‡8: :>=Ñ„83ÑƒÑ€0Ñ†88.
 func NewConfigHandler(cfg *config.Config, fileSettingsRepo *repository.FileSettingsRepository, serviceRepo *repository.ServiceSettingsRepository) *ConfigHandler {
 	return &ConfigHandler{cfg: cfg, fileSettingsRepo: fileSettingsRepo, serviceRepo: serviceRepo, generatedAt: time.Now().UTC()}
 }
 
-// GetCacheConfig возвращает настройки кеша для клиента (без авторизации).
+// GetCacheConfig 2>72Ñ€0Ñ‰05Ñ‚ =0AÑ‚Ñ€>9:8 :5Ñˆ0 4;O :;85=Ñ‚0 (157 02Ñ‚>Ñ€870Ñ†88).
 func (h *ConfigHandler) GetCacheConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSONCached(w, r, http.StatusOK, map[string]int{
 		"ttl_minutes": h.cfg.Cache.TTLMinutes,
 	}, h.generatedAt)
 }
 
-// GetPushConfig возвращает публичный VAPID-ключ для подписки на пуши (если включены).
+// GetPushConfig 2>72Ñ€0Ñ‰05Ñ‚ ?Ñƒ1;8Ñ‡=Ñ‹9 VAPID-:;ÑŽÑ‡ 4;O ?>4?8A:8 =0 ?ÑƒÑˆ8 (5A;8 2:;ÑŽÑ‡5=Ñ‹).
 func (h *ConfigHandler) GetPushConfig(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.PushServiceURL == "" || h.cfg.PushVAPIDPublicKey == "" {
 		writeJSONCached(w, r, http.StatusOK, map[string]interface{}{"enabled": false}, h.generatedAt)
@@ -64,11 +64,11 @@ func (h *ConfigHandler) GetAppConfig(w http.ResponseWriter, r *http.Request) {
 
 	if msg == "" {
 		if maintenance && readOnly {
-			msg = "Идёт обслуживание. Отправка сообщений временно недоступна."
+			msg = "Ð˜4Ñ‘Ñ‚ >1A;Ñƒ6820=85. ÐžÑ‚?Ñ€02:0 A>>1Ñ‰5=89 2Ñ€5<5==> =54>AÑ‚Ñƒ?=0."
 		} else if maintenance {
-			msg = "Идёт обслуживание."
+			msg = "Ð˜4Ñ‘Ñ‚ >1A;Ñƒ6820=85."
 		} else if degradation {
-			msg = "Возможны задержки в работе сервиса."
+			msg = "Ð’>7<>6=Ñ‹ 7045Ñ€6:8 2 Ñ€01>Ñ‚5 A5Ñ€28A0."
 		}
 	}
 	writeJSONCached(w, r, http.StatusOK, map[string]interface{}{

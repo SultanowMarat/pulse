@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore, useChatStore, useThemeStore } from './store';
 import Auth from './pages/Auth';
-import Messenger from './pages/Messenger';
+import Pulse from './pages/Pulse';
 import { registerPushIfEnabled, requestNotificationPermissionForPWA, startPushBackgroundMaintenance } from './push';
 
 export default function App() {
@@ -42,5 +42,5 @@ export default function App() {
   }, [isAuthenticated]);
 
   if (!isAuthenticated) return <Auth />;
-  return <Messenger />;
+  return <Pulse />;
 }

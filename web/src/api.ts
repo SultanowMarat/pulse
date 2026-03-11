@@ -1,4 +1,4 @@
-import type { ChatWithLastMessage, Message, UserPublic, UserStats, FileUploadResponse, PinnedMessage, Reaction } from './types';
+﻿import type { ChatWithLastMessage, Message, UserPublic, UserStats, FileUploadResponse, PinnedMessage, Reaction } from './types';
 import { getApiBase } from './serverUrl';
 
 /** Префикс API-маршрутов; должен совпадать с маршрутами на бэкенде (path = r.URL.Path). */
@@ -86,7 +86,7 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
     const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
     const msg = data.error || `HTTP ${res.status}`;
     const friendly = res.status === 500 ? 'Ошибка сервера. Попробуйте позже.' : msg;
-    if (res.status === 500 && msg !== friendly) console.error('API 500:', msg);
+    if (res.status === 500 && msg !== friendly) console.error('сѐщ еаа:', msg);
     throw new ApiError(friendly, res.status);
   }
   return res.json();
@@ -160,6 +160,12 @@ export interface RequestCodeResponse {
   is_new_user?: boolean;
 }
 
+function normalizeAuthIdentifier(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes('@')) return trimmed.toLowerCase();
+  return trimmed;
+}
+
 /** UUID v4: использует randomUUID или fallback через getRandomValues (для старых браузеров / без HTTPS). */
 function randomUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -182,15 +188,20 @@ function getDeviceId(): string {
   return id;
 }
 
-export const requestCode = (email: string): Promise<RequestCodeResponse> =>
+function normalizeAuthHttpError(status: number, message?: string): string {
+  if (status >= 500) return 'Приложение не работает зайдите позже';
+  return message || `HTTP ${status}`;
+}
+
+export const requestCode = (identifier: string): Promise<RequestCodeResponse> =>
   fetch(`${getApiRoot()}/auth/request-code`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.trim().toLowerCase(), device_id: getDeviceId(), device_name: 'Web' }),
+    body: JSON.stringify({ email: normalizeAuthIdentifier(identifier), device_id: getDeviceId(), device_name: 'Web' }),
   }).then(async (res) => {
     const data = await res.json().catch(() => ({} as RequestCodeResponse & { error?: string }));
     if (!res.ok) {
-      throw new Error(data.error || `HTTP ${res.status}`);
+      throw new Error(normalizeAuthHttpError(res.status, data.error));
     }
     return data;
   });
@@ -207,7 +218,7 @@ export const verifyCode = (email: string, code: string, deviceName?: string): Pr
     }),
   }).then(async (res) => {
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(normalizeAuthHttpError(res.status, data.error));
     return data as VerifyCodeResponse;
   });
 
@@ -231,7 +242,6 @@ export interface UserPermissions {
   user_id: string;
   administrator: boolean;
   member: boolean;
-  assistant_administrator: boolean;
   updated_at?: string;
 }
 
@@ -253,6 +263,10 @@ export interface MailTestError {
 export interface FileSettings {
   max_file_size_mb: number;
   updated_at?: string;
+}
+export interface UploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (percent: number, loaded: number, total: number) => void;
 }
 
 export const getUserPermissions = (userId: string) =>
@@ -336,7 +350,7 @@ export const listUsers = () => request<UserPublic[]>('/users');
 /** Список всех сотрудников (только для администратора). */
 export const listEmployees = () => request<UserPublic[]>('/users/employees');
 export interface EmployeePublic extends UserPublic {
-  role: 'member' | 'assistant_administrator' | 'administrator';
+  role: 'member' | 'administrator';
 }
 export interface EmployeesPage {
   users: EmployeePublic[];
@@ -344,7 +358,10 @@ export interface EmployeesPage {
   limit: number;
   offset: number;
 }
-export const listEmployeesPage = (params: { q?: string; limit?: number; offset?: number; sort_key?: string; sort_dir?: string }) => {
+export const listEmployeesPage = (
+  params: { q?: string; limit?: number; offset?: number; sort_key?: string; sort_dir?: string },
+  options?: { signal?: AbortSignal }
+) => {
   const sp = new URLSearchParams();
   if (params.q) sp.set('q', params.q);
   if (typeof params.limit === 'number') sp.set('limit', String(params.limit));
@@ -352,23 +369,29 @@ export const listEmployeesPage = (params: { q?: string; limit?: number; offset?:
   if (params.sort_key) sp.set('sort_key', params.sort_key);
   if (params.sort_dir) sp.set('sort_dir', params.sort_dir);
   const qs = sp.toString();
-  return request<EmployeesPage>(`/users/employees/page${qs ? `?${qs}` : ''}`);
+  return request<EmployeesPage>(`/users/employees/page${qs ? `?${qs}` : ''}`, { signal: options?.signal });
 };
 /** Создать пользователя (админ). При первом входе по этой почте это будет его профиль. */
 export const createUser = (data: {
   email: string;
   username: string;
   phone?: string;
-  company?: string;
   position?: string;
   avatar_url?: string;
   permissions?: Partial<Record<keyof Omit<UserPermissions, 'user_id' | 'updated_at'>, boolean>>;
 }) => request<UserPublic>('/users', { method: 'POST', body: JSON.stringify(data) });
 export const searchUsers = (q: string) => request<UserPublic[]>(`/users/search?q=${encodeURIComponent(q)}`);
-export const updateProfile = (data: { username?: string; avatar_url?: string; email?: string; phone?: string; company?: string; position?: string }) =>
+export const updateProfile = (data: { username?: string; avatar_url?: string; email?: string; phone?: string; position?: string }) =>
   request<UserPublic>('/users/me', { method: 'PUT', body: JSON.stringify(data) });
-export const updateUserProfile = (userId: string, data: { username?: string; avatar_url?: string; email?: string; phone?: string; company?: string; position?: string }) =>
+export const updateUserProfile = (userId: string, data: { username?: string; avatar_url?: string; email?: string; phone?: string; position?: string }) =>
   request<UserPublic>(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) });
+export interface GenerateUserLoginKeyResponse {
+  login_key: string;
+  max_attempts: number;
+  generated_now: boolean;
+}
+export const generateUserLoginKey = (userId: string) =>
+  request<GenerateUserLoginKeyResponse>(`/users/${userId}/login-key/generate`, { method: 'POST' });
 /** Отключить или включить пользователя (только администратор). Отключённый не может войти. */
 export const setUserDisabled = (userId: string, disabled: boolean) =>
   request<{ disabled: boolean }>(`/users/${userId}/disable`, { method: 'PUT', body: JSON.stringify({ disabled }) });
@@ -418,16 +441,105 @@ export const getPinnedMessages = (chatId: string) =>
 export const getReactions = (messageId: string) =>
   request<Reaction[]>(`/messages/${messageId}/reactions`);
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
+function parseApiErrorResponse(status: number, bodyText: string): Error {
+  try {
+    const data = bodyText ? JSON.parse(bodyText) as { error?: string } : {};
+    const msg = data.error || `HTTP ${status}`;
+    const friendly = status === 500 ? 'Ошибка сервера. Попробуйте позже.' : msg;
+    return new ApiError(friendly, status);
+  } catch {
+    return new ApiError(`HTTP ${status}`, status);
+  }
+}
+
+async function uploadWithProgress(path: '/files/upload' | '/audio/upload', file: File, opts?: UploadOptions): Promise<FileUploadResponse> {
+  const method = 'POST';
+  const pathForSignature = `${API}${path}`;
+  const sessionHeaders = await getSessionAuthHeaders(method, pathForSignature, '');
+  const url = `${getApiRoot()}${path}`;
+
+  return new Promise<FileUploadResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    if (sessionHeaders) {
+      Object.entries(sessionHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    }
+
+    const cleanupAbort = () => {
+      if (opts?.signal) opts.signal.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      try { xhr.abort(); } catch { /* ignore */ }
+      cleanupAbort();
+      reject(new DOMException('The operation was aborted', 'AbortError'));
+    };
+    if (opts?.signal) {
+      if (opts.signal.aborted) return onAbort();
+      opts.signal.addEventListener('abort', onAbort);
+    }
+
+    xhr.upload.onprogress = (evt) => {
+      if (!opts?.onProgress) return;
+      if (!evt.lengthComputable || evt.total <= 0) {
+        opts.onProgress(0, evt.loaded || 0, evt.total || 0);
+        return;
+      }
+      const percent = Math.max(0, Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+      opts.onProgress(percent, evt.loaded, evt.total);
+    };
+
+    xhr.onload = () => {
+      cleanupAbort();
+      const text = xhr.responseText || '';
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(parseApiErrorResponse(xhr.status, text));
+        return;
+      }
+      try {
+        const parsed = text ? JSON.parse(text) as FileUploadResponse : ({} as FileUploadResponse);
+        opts?.onProgress?.(100, file.size, file.size);
+        resolve(parsed);
+      } catch {
+        reject(new Error('Invalid response'));
+      }
+    };
+
+    xhr.onerror = () => {
+      cleanupAbort();
+      reject(new Error('Network request failed'));
+    };
+
+    xhr.onabort = () => {
+      cleanupAbort();
+      reject(new DOMException('The operation was aborted', 'AbortError'));
+    };
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      xhr.send(fd);
+    } catch (err) {
+      cleanupAbort();
+      if (isAbortError(err)) {
+        reject(new DOMException('The operation was aborted', 'AbortError'));
+        return;
+      }
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+}
+
 // Files
-export const uploadFile = async (file: File): Promise<FileUploadResponse> => {
-  const fd = new FormData();
-  fd.append('file', file);
-  return request<FileUploadResponse>('/files/upload', { method: 'POST', body: fd });
+export const uploadFile = async (file: File, opts?: UploadOptions): Promise<FileUploadResponse> => {
+  return uploadWithProgress('/files/upload', file, opts);
 };
 
 // Voice (audio messages — отдельный микросервис)
-export const uploadAudio = async (file: File): Promise<FileUploadResponse> => {
-  const fd = new FormData();
-  fd.append('file', file);
-  return request<FileUploadResponse>('/audio/upload', { method: 'POST', body: fd });
+export const uploadAudio = async (file: File, opts?: UploadOptions): Promise<FileUploadResponse> => {
+  return uploadWithProgress('/audio/upload', file, opts);
 };
+

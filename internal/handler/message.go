@@ -5,11 +5,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/messenger/internal/cache"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/cache"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
 )
 
 type MessageHandler struct {

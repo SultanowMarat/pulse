@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/runtime"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/runtime"
 )
 
 func wsWriteWait() time.Duration {

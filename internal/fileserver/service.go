@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,13 +23,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Блокируем только опасные расширения (исполняемые/скрипты). Остальные — разрешены.
+// Ð‘;>:8Ñ€Ñƒ5< Ñ‚>;ÑŒ:> >?0A=Ñ‹5 Ñ€0AÑˆ8Ñ€5=8O (8A?>;=O5<Ñ‹5/A:Ñ€8?Ñ‚Ñ‹). ÐžAÑ‚0;ÑŒ=Ñ‹5 â€” Ñ€07Ñ€5Ñˆ5=Ñ‹.
 var BlockedExt = map[string]bool{
 	".exe": true, ".sh": true, ".js": true, ".bat": true, ".cmd": true,
 	".php": true, ".py": true, ".rb": true,
 }
 
-// UploadResponse — ответ после успешной загрузки.
+// UploadResponse â€” >Ñ‚25Ñ‚ ?>A;5 ÑƒA?5Ñˆ=>9 703Ñ€Ñƒ7:8.
 type UploadResponse struct {
 	URL         string `json:"url"`
 	FileName    string `json:"file_name"`
@@ -37,14 +37,14 @@ type UploadResponse struct {
 	ContentType string `json:"content_type"`
 }
 
-// Service обрабатывает загрузку и раздачу файлов.
+// Service >1Ñ€010Ñ‚Ñ‹205Ñ‚ 703Ñ€Ñƒ7:Ñƒ 8 Ñ€0740Ñ‡Ñƒ Ñ„09;>2.
 type Service struct {
 	UploadDir string
 	// maxUploadSize is dynamic (can be updated at runtime by admin settings).
 	maxUploadSize atomic.Int64
 }
 
-// New создаёт сервис с заданным каталогом и лимитом размера (в байтах).
+// New A>740Ñ‘Ñ‚ A5Ñ€28A A 7040==Ñ‹< :0Ñ‚0;>3>< 8 ;8<8Ñ‚>< Ñ€07<5Ñ€0 (2 109Ñ‚0Ñ…).
 func New(uploadDir string, maxUploadSize int64) *Service {
 	s := &Service{UploadDir: uploadDir}
 	if maxUploadSize <= 0 {
@@ -81,7 +81,7 @@ func (s *Service) writeError(w http.ResponseWriter, status int, msg string) {
 	s.writeJSON(w, status, struct{ Error string }{Error: msg})
 }
 
-// Upload обрабатывает POST multipart/form-data с полем "file".
+// Upload >1Ñ€010Ñ‚Ñ‹205Ñ‚ POST multipart/form-data A ?>;5< "file".
 func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	maxSize := s.MaxUploadSizeBytes()
@@ -99,7 +99,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// В ряде клиентов/прокси пробел в имени кодируется как "+"; нормализуем для отображения и расширения.
+	// Ð’ Ñ€O45 :;85=Ñ‚>2/?Ñ€>:A8 ?Ñ€>15; 2 8<5=8 :>48Ñ€Ñƒ5Ñ‚AO :0: "+"; =>Ñ€<0;87Ñƒ5< 4;O >Ñ‚>1Ñ€065=8O 8 Ñ€0AÑˆ8Ñ€5=8O.
 	rawFilename := strings.ReplaceAll(header.Filename, "+", " ")
 	ext := strings.ToLower(filepath.Ext(rawFilename))
 	if BlockedExt[ext] {
@@ -121,7 +121,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Сохраняем в сжатом виде (.gz) для экономии места
+	// !>Ñ…Ñ€0=O5< 2 A60Ñ‚>< 2845 (.gz) 4;O M:>=><88 <5AÑ‚0
 	dstPath := filepath.Join(s.UploadDir, newName+".gz")
 	dst, err := os.Create(dstPath)
 	if err != nil {
@@ -163,7 +163,7 @@ func (s *Service) Upload(w http.ResponseWriter, r *http.Request) {
 		contentType = "image"
 	}
 
-	// Имя для отображения: только базовая часть без пути, безопасные символы; иначе — сгенерированное
+	// Ð˜<O 4;O >Ñ‚>1Ñ€065=8O: Ñ‚>;ÑŒ:> 107>20O Ñ‡0AÑ‚ÑŒ 157 ?ÑƒÑ‚8, 157>?0A=Ñ‹5 A8<2>;Ñ‹; 8=0Ñ‡5 â€” A35=5Ñ€8Ñ€>20==>5
 	displayName := strings.TrimSpace(filepath.Base(rawFilename))
 	if displayName == "" || safeFilename(displayName) == "" {
 		displayName = newName
@@ -203,7 +203,7 @@ func matchMagic(ext string, head []byte) bool {
 	return true
 }
 
-// Serve отдаёт файл по имени (разархивирует при отдаче); query name= — оригинальное имя для Content-Disposition.
+// Serve >Ñ‚40Ñ‘Ñ‚ Ñ„09; ?> 8<5=8 (Ñ€070Ñ€Ñ…828Ñ€Ñƒ5Ñ‚ ?Ñ€8 >Ñ‚40Ñ‡5); query name= â€” >Ñ€838=0;ÑŒ=>5 8<O 4;O Content-Disposition.
 func (s *Service) Serve(w http.ResponseWriter, r *http.Request, filename string) {
 	filename = filepath.Base(filename)
 	ext := filepath.Ext(filename)
@@ -214,13 +214,13 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, filename string)
 		w.Header().Set("Content-Type", ct)
 	}
 	if origName := r.URL.Query().Get("name"); origName != "" {
-		// В URL пробел может приходить как "+"; нормализуем для сохранения имени при скачивании (UTF-8).
+		// Ð’ URL ?Ñ€>15; <>65Ñ‚ ?Ñ€8Ñ…>48Ñ‚ÑŒ :0: "+"; =>Ñ€<0;87Ñƒ5< 4;O A>Ñ…Ñ€0=5=8O 8<5=8 ?Ñ€8 A:0Ñ‡820=88 (UTF-8).
 		origName = strings.TrimSpace(strings.ReplaceAll(origName, "+", " "))
 		safe := safeFilename(origName)
 		if safe != "" {
 			disp := "attachment; filename*=UTF-8''" + url.QueryEscape(safe)
-			// Legacy filename= с ASCII искажает кириллицу (подчёркивания) — не добавляем его,
-			// чтобы панель загрузки браузера показывала имя из filename*=UTF-8''.
+			// Legacy filename= A ASCII 8A:0605Ñ‚ :8Ñ€8;;8Ñ†Ñƒ (?>4Ñ‡Ñ‘Ñ€:820=8O) â€” =5 4>102;O5< 53>,
+			// Ñ‡Ñ‚>1Ñ‹ ?0=5;ÑŒ 703Ñ€Ñƒ7:8 1Ñ€0Ñƒ75Ñ€0 ?>:07Ñ‹20;0 8<O 87 filename*=UTF-8''.
 			if ascii := asciiFallbackFilename(safe); ascii != "" && ascii == safe {
 				disp = "attachment; filename=\"" + ascii + "\"; " + disp
 			}
@@ -228,7 +228,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, filename string)
 		}
 	}
 
-	// Сначала сжатый .gz, иначе — обычный файл (обратная совместимость)
+	// !=0Ñ‡0;0 A60Ñ‚Ñ‹9 .gz, 8=0Ñ‡5 â€” >1Ñ‹Ñ‡=Ñ‹9 Ñ„09; (>1Ñ€0Ñ‚=0O A>2<5AÑ‚8<>AÑ‚ÑŒ)
 	if fi, err := os.Stat(gzPath); err == nil {
 		etag := buildFileETag(filename, fi)
 		w.Header().Set("ETag", etag)
@@ -329,8 +329,8 @@ func contentTypeByExt(ext string) string {
 	return ""
 }
 
-// safeFilename оставляет имя файла безопасным для Content-Disposition (без управляющих символов и кавычек).
-// Поддерживается UTF-8, чтобы сохранять кириллицу и другие языки.
+// safeFilename >AÑ‚02;O5Ñ‚ 8<O Ñ„09;0 157>?0A=Ñ‹< 4;O Content-Disposition (157 Ñƒ?Ñ€02;OÑŽÑ‰8Ñ… A8<2>;>2 8 :02Ñ‹Ñ‡5:).
+// ÐŸ>445Ñ€68205Ñ‚AO UTF-8, Ñ‡Ñ‚>1Ñ‹ A>Ñ…Ñ€0=OÑ‚ÑŒ :8Ñ€8;;8Ñ†Ñƒ 8 4Ñ€Ñƒ385 O7Ñ‹:8.
 func safeFilename(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -349,8 +349,8 @@ func safeFilename(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// asciiFallbackFilename возвращает имя только из ASCII для legacy filename= в Content-Disposition.
-// Пробелы и не-ASCII заменяются на подчёркивание, чтобы не появлялось "+" в предложенном имени.
+// asciiFallbackFilename 2>72Ñ€0Ñ‰05Ñ‚ 8<O Ñ‚>;ÑŒ:> 87 ASCII 4;O legacy filename= 2 Content-Disposition.
+// ÐŸÑ€>15;Ñ‹ 8 =5-ASCII 70<5=OÑŽÑ‚AO =0 ?>4Ñ‡Ñ‘Ñ€:820=85, Ñ‡Ñ‚>1Ñ‹ =5 ?>O2;O;>AÑŒ "+" 2 ?Ñ€54;>65==>< 8<5=8.
 func asciiFallbackFilename(s string) string {
 	var b strings.Builder
 	for _, r := range s {

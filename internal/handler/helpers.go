@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/messenger/internal/logger"
+	"github.com/pulse/internal/logger"
 )
 
 type errorResponse struct {

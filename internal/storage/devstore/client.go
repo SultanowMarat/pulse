@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/storage/memory"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/storage/memory"
 )
 
-// Client реализует SessionOTPStore для режима -dev: OTP и rate limit в памяти,
-// session_secret в БД — сессии переживают перезапуск Auth.
+// Client Ñ€50;87Ñƒ5Ñ‚ SessionOTPStore 4;O Ñ€568<0 -dev: OTP 8 rate limit 2 ?0<OÑ‚8,
+// session_secret 2 Ð‘Ð” â€” A5AA88 ?5Ñ€56820ÑŽÑ‚ ?5Ñ€570?ÑƒA: Auth.
 type Client struct {
 	mem  *memory.Client
 	repo *repository.SessionRepository

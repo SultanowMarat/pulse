@@ -7,10 +7,10 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/messenger/internal/email"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/email"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
 )
 
 type AdminHandler struct {
@@ -160,7 +160,7 @@ func (h *AdminHandler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error_code": "SMTP_NOT_CONFIGURED",
-			"error":      "Почта не настроена. Заполните SMTP-поля.",
+			"error":      "ÐŸ>Ñ‡Ñ‚0 =5 =0AÑ‚Ñ€>5=0. Ð—0?>;=8Ñ‚5 SMTP-?>;O.",
 		})
 		return
 	}
@@ -171,7 +171,7 @@ func (h *AdminHandler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error_code": "SMTP_SEND_FAILED",
-			"error":      "Не удалось отправить тестовое письмо",
+			"error":      "5 Ñƒ40;>AÑŒ >Ñ‚?Ñ€028Ñ‚ÑŒ Ñ‚5AÑ‚>2>5 ?8AÑŒ<>",
 			"detail":     err.Error(),
 		})
 		return

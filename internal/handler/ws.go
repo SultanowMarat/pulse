@@ -2,36 +2,55 @@ package handler
 
 import (
 	"context"
+	"net/url"
 	"net/http"
 	"strings"
 
 	"github.com/gorilla/websocket"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/runtime"
-	"github.com/messenger/internal/ws"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/runtime"
+	"github.com/pulse/internal/ws"
 )
 
 type WSHandler struct {
 	hub             *ws.Hub
 }
 
-// NewWSHandler создаёт обработчик WebSocket. Origins берутся из runtime настроек.
+// NewWSHandler A>740Ñ‘Ñ‚ >1Ñ€01>Ñ‚Ñ‡8: WebSocket. Origins 15Ñ€ÑƒÑ‚AO 87 runtime =0AÑ‚Ñ€>5:.
 func NewWSHandler(hub *ws.Hub) *WSHandler {
 	return &WSHandler{hub: hub}
 }
 
 func (h *WSHandler) checkOrigin(r *http.Request) bool {
-	allowed := runtime.AllowedOrigins()
-	if allowed == "*" || allowed == "" {
-		return true
-	}
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
 		return true
 	}
+	// Always allow same-origin WS (current host/proto), even with strict allow-list.
+	scheme := "http"
+	if xfProto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); xfProto != "" {
+		scheme = xfProto
+	} else if r.TLS != nil {
+		scheme = "https"
+	}
+	expectedOrigin := scheme + "://" + r.Host
+	if strings.EqualFold(origin, expectedOrigin) {
+		return true
+	}
+
+	allowed := runtime.AllowedOrigins()
+	if allowed == "*" || allowed == "" {
+		return true
+	}
+	originURL, err := url.Parse(origin)
+	if err != nil || originURL.Scheme == "" || originURL.Host == "" {
+		return false
+	}
+	normalizedOrigin := strings.ToLower(originURL.Scheme + "://" + originURL.Host)
 	for _, o := range strings.Split(allowed, ",") {
-		if strings.TrimSpace(o) == origin {
+		candidate := strings.ToLower(strings.TrimSpace(o))
+		if candidate == normalizedOrigin {
 			return true
 		}
 	}

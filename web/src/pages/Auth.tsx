@@ -50,15 +50,15 @@ export default function Auth() {
               </div>
             ) : (
               <img
-                src="/brand/buhchat.png"
-                alt="BuhChat"
+                src="/brand/pulse.png"
+                alt="pulse"
                 className="w-20 h-20 rounded-[20px] shadow-lg shadow-black/20"
                 onError={() => setLogoFailed(true)}
               />
             )}
           </div>
-          <h1 className="text-[24px] font-bold text-txt dark:text-[#e7e9ea] tracking-[-0.3px]">BuhChat</h1>
-          <p className="text-txt-secondary dark:text-[#8b98a5] text-[14px] mt-1">Портал для бухгалтеров</p>
+          <h1 className="text-[24px] font-bold text-txt dark:text-[#e7e9ea] tracking-[-0.3px]">pulse</h1>
+          <p className="text-txt-secondary dark:text-[#8b98a5] text-[14px] mt-1">Портал компании</p>
         </div>
 
         <div className="bg-white dark:bg-dark-elevated rounded-compass shadow-compass-dialog overflow-hidden overflow-x-clip border border-transparent dark:border-dark-border min-w-0">

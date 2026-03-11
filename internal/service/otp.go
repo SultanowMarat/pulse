@@ -17,20 +17,24 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/messenger/internal/email"
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/model"
-	"github.com/messenger/internal/repository"
-	"github.com/messenger/internal/storage"
+	"github.com/pulse/internal/authkey"
+	"github.com/pulse/internal/email"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/model"
+	"github.com/pulse/internal/repository"
+	"github.com/pulse/internal/storage"
 )
 
 var (
 	ErrRateLimitExceeded = errors.New("rate limit exceeded")
 	ErrInvalidOTP        = errors.New("invalid or expired OTP")
 	ErrInvalidEmail      = errors.New("invalid email format")
+	ErrInvalidLoginKey   = errors.New("invalid or expired login key")
 	ErrUserDisabled      = errors.New("user disabled")
 	ErrUserNotInvited    = errors.New("user is not invited")
 )
+
+const requestTimestampSkew = 10 * time.Minute
 
 func maskSessionID(s string) string {
 	s = strings.TrimSpace(s)
@@ -66,10 +70,10 @@ type RequestCodeRequest struct {
 	DeviceName string `json:"device_name"`
 }
 
-// Валидация email: допустимый формат (упрощённый, без полного RFC).
+// Ð’0;840Ñ†8O email: 4>?ÑƒAÑ‚8<Ñ‹9 Ñ„>Ñ€<0Ñ‚ (Ñƒ?Ñ€>Ñ‰Ñ‘==Ñ‹9, 157 ?>;=>3> RFC).
 var emailRegexp = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
-// onlyDigits оставляет в строке только цифры (для кода из письма — убирает пробелы и невидимые символы при вставке).
+// onlyDigits >AÑ‚02;O5Ñ‚ 2 AÑ‚Ñ€>:5 Ñ‚>;ÑŒ:> Ñ†8Ñ„Ñ€Ñ‹ (4;O :>40 87 ?8AÑŒ<0 â€” Ñƒ18Ñ€05Ñ‚ ?Ñ€>15;Ñ‹ 8 =52848<Ñ‹5 A8<2>;Ñ‹ ?Ñ€8 2AÑ‚02:5).
 func onlyDigits(s string) string {
 	var b []byte
 	for i := 0; i < len(s); i++ {
@@ -80,17 +84,17 @@ func onlyDigits(s string) string {
 	return string(b)
 }
 
-// normalizeEmailForKey приводит email к одному виду для ключа Redis (латиница, нижний регистр).
-// Заменяет кириллические буквы-двойники на латинские, чтобы вставка из буфера не ломала ключ.
+// normalizeEmailForKey ?Ñ€82>48Ñ‚ email : >4=><Ñƒ 284Ñƒ 4;O :;ÑŽÑ‡0 Redis (;0Ñ‚8=8Ñ†0, =86=89 Ñ€538AÑ‚Ñ€).
+// Ð—0<5=O5Ñ‚ :8Ñ€8;;8Ñ‡5A:85 1Ñƒ:2Ñ‹-42>9=8:8 =0 ;0Ñ‚8=A:85, Ñ‡Ñ‚>1Ñ‹ 2AÑ‚02:0 87 1ÑƒÑ„5Ñ€0 =5 ;><0;0 :;ÑŽÑ‡.
 func normalizeEmailForKey(s string) string {
 	const (
-		cyrO = '\u043e' // о
-		cyrA = '\u0430' // а
-		cyrE = '\u0435' // е
-		cyrP = '\u0440' // р
-		cyrC = '\u0441' // с
-		cyrX = '\u0445' // х
-		cyrY = '\u0443' // у
+		cyrO = '\u043e' // >
+		cyrA = '\u0430' // 0
+		cyrE = '\u0435' // 5
+		cyrP = '\u0440' // Ñ€
+		cyrC = '\u0441' // A
+		cyrX = '\u0445' // Ñ…
+		cyrY = '\u0443' // Ñƒ
 	)
 	var b strings.Builder
 	b.Grow(len(s))
@@ -118,10 +122,40 @@ func normalizeEmailForKey(s string) string {
 }
 
 func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest) (*VerifyCodeResponse, error) {
-	emailNorm := strings.TrimSpace(strings.ToLower(req.Email))
-	if emailNorm == "" {
-		return nil, fmt.Errorf("email обязателен")
+	identifier := strings.TrimSpace(req.Email)
+	if identifier == "" {
+		return nil, fmt.Errorf("email >1O70Ñ‚5;5=")
 	}
+	if emailRegexp.MatchString(strings.ToLower(identifier)) {
+		return s.requestCodeByEmail(ctx, req, identifier)
+	}
+	return s.requestCodeByLoginKey(ctx, req, identifier)
+}
+
+func (s *OTPAuthService) requestCodeByLoginKey(ctx context.Context, req RequestCodeRequest, key string) (*VerifyCodeResponse, error) {
+	if req.DeviceID == "" {
+		req.DeviceID = "login-key-" + uuid.New().String()
+	}
+	if strings.TrimSpace(req.DeviceName) == "" {
+		req.DeviceName = "Web"
+	}
+
+	keyHash := authkey.Hash(strings.TrimSpace(key))
+	user, _, err := s.userRepo.ConsumeLoginKeyAttempt(ctx, keyHash, authkey.MaxAttempts)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrInvalidLoginKey
+	}
+	if user.DisabledAt != nil {
+		return nil, ErrUserDisabled
+	}
+	return s.issueSession(ctx, user, req.DeviceID, req.DeviceName, false)
+}
+
+func (s *OTPAuthService) requestCodeByEmail(ctx context.Context, req RequestCodeRequest, identifier string) (*VerifyCodeResponse, error) {
+	emailNorm := strings.TrimSpace(strings.ToLower(identifier))
 	if !emailRegexp.MatchString(emailNorm) {
 		return nil, ErrInvalidEmail
 	}
@@ -151,9 +185,9 @@ func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest
 			}); err != nil {
 				return nil, err
 			}
-			// Для первого пользователя:
-			// - если SMTP не настроен, разрешаем вход без OTP;
-			// - если SMTP настроен, отправляем код как обычному пользователю.
+			// Ð”;O ?5Ñ€2>3> ?>;ÑŒ7>20Ñ‚5;O:
+			// - 5A;8 SMTP =5 =0AÑ‚Ñ€>5=, Ñ€07Ñ€5Ñˆ05< 2Ñ…>4 157 OTP;
+			// - 5A;8 SMTP =0AÑ‚Ñ€>5=, >Ñ‚?Ñ€02;O5< :>4 :0: >1Ñ‹Ñ‡=><Ñƒ ?>;ÑŒ7>20Ñ‚5;ÑŽ.
 			if smtpCfg == nil {
 				if req.DeviceID == "" {
 					req.DeviceID = "bootstrap-" + uuid.New().String()
@@ -175,7 +209,7 @@ func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest
 	if user.DisabledAt != nil {
 		return nil, ErrUserDisabled
 	}
-	// Если SMTP не настроен — вход без кода (по требованию администратора).
+	// Ð•A;8 SMTP =5 =0AÑ‚Ñ€>5= â€” 2Ñ…>4 157 :>40 (?> Ñ‚Ñ€51>20=8ÑŽ 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0).
 	if smtpCfg == nil {
 		if req.DeviceID == "" {
 			req.DeviceID = "passwordless-" + uuid.New().String()
@@ -193,11 +227,11 @@ func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest
 	if !allowed {
 		return nil, ErrRateLimitExceeded
 	}
-	// Если код уже был запрошен недавно (осталось > 4 мин TTL), переотправляем тот же код — не перезаписываем в Redis.
+	// Ð•A;8 :>4 Ñƒ65 1Ñ‹; 70?Ñ€>Ñˆ5= =5402=> (>AÑ‚0;>AÑŒ > 4 <8= TTL), ?5Ñ€5>Ñ‚?Ñ€02;O5< Ñ‚>Ñ‚ 65 :>4 â€” =5 ?5Ñ€570?8AÑ‹205< 2 Redis.
 	const minTTLToReuse = 240 * time.Second
 	if existing, _ := s.store.GetOTP(ctx, keyEmail); existing != "" && len(existing) == 6 {
 		if ttl, _ := s.store.GetOTPTTL(ctx, keyEmail); ttl >= minTTLToReuse {
-			logger.Infof("request-code: переотправка того же кода для key=otp:%s (TTL %.0fs)", keyEmail, ttl.Seconds())
+			logger.Infof("request-code: ?5Ñ€5>Ñ‚?Ñ€02:0 Ñ‚>3> 65 :>40 4;O key=otp:%s (TTL %.0fs)", keyEmail, ttl.Seconds())
 			return nil, email.NewSender(smtpCfg).SendOTP(ctx, emailNorm, existing)
 		}
 	}
@@ -205,7 +239,7 @@ func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest
 	if err := s.store.SetOTP(ctx, keyEmail, code); err != nil {
 		return nil, err
 	}
-	logger.Infof("request-code: код сохранён для key=otp:%s", keyEmail)
+	logger.Infof("request-code: :>4 A>Ñ…Ñ€0=Ñ‘= 4;O key=otp:%s", keyEmail)
 	return nil, email.NewSender(smtpCfg).SendOTP(ctx, emailNorm, code)
 }
 
@@ -213,7 +247,7 @@ type VerifyCodeRequest struct {
 	Email      string `json:"email"`
 	Code       string `json:"code"`
 	DeviceID   string `json:"device_id"`
-	DeviceName string `json:"device_name"` // опционально
+	DeviceName string `json:"device_name"` // >?Ñ†8>=0;ÑŒ=>
 }
 
 type VerifyCodeResponse struct {
@@ -227,7 +261,7 @@ func (s *OTPAuthService) VerifyCode(ctx context.Context, req VerifyCodeRequest) 
 	keyEmail := normalizeEmailForKey(emailNorm)
 	codeNorm := onlyDigits(strings.TrimSpace(req.Code))
 	if emailNorm == "" || codeNorm == "" || req.DeviceID == "" {
-		return nil, fmt.Errorf("email, code и device_id обязательны")
+		return nil, fmt.Errorf("email, code 8 device_id >1O70Ñ‚5;ÑŒ=Ñ‹")
 	}
 	if len(codeNorm) != 6 {
 		return nil, ErrInvalidOTP
@@ -238,15 +272,15 @@ func (s *OTPAuthService) VerifyCode(ctx context.Context, req VerifyCodeRequest) 
 		return nil, ErrInvalidOTP
 	}
 	if storedCode == "" {
-		logger.Infof("verify-code: ключ otp:%s пуст или истёк (запросите код заново)", keyEmail)
+		logger.Infof("verify-code: :;ÑŽÑ‡ otp:%s ?ÑƒAÑ‚ 8;8 8AÑ‚Ñ‘: (70?Ñ€>A8Ñ‚5 :>4 70=>2>)", keyEmail)
 		return nil, ErrInvalidOTP
 	}
-	// Сравнение constant-time. Код в Redis хранится как 6 цифр, ввод нормализован через onlyDigits.
+	// !Ñ€02=5=85 constant-time. Ðš>4 2 Redis Ñ…Ñ€0=8Ñ‚AO :0: 6 Ñ†8Ñ„Ñ€, 22>4 =>Ñ€<0;87>20= Ñ‡5Ñ€57 onlyDigits.
 	if len(storedCode) != 6 || subtle.ConstantTimeCompare([]byte(storedCode), []byte(codeNorm)) != 1 {
-		logger.Infof("verify-code: несовпадение key=%s len(stored)=%d len(entered)=%d", keyEmail, len(storedCode), len(codeNorm))
+		logger.Infof("verify-code: =5A>2?045=85 key=%s len(stored)=%d len(entered)=%d", keyEmail, len(storedCode), len(codeNorm))
 		return nil, ErrInvalidOTP
 	}
-	// Код верный — удаляем OTP (одноразовое использование).
+	// Ðš>4 25Ñ€=Ñ‹9 â€” Ñƒ40;O5< OTP (>4=>Ñ€07>2>5 8A?>;ÑŒ7>20=85).
 	if err := s.store.DeleteOTP(ctx, keyEmail); err != nil {
 		logger.Errorf("verify-code: DeleteOTP key=%s: %v", keyEmail, err)
 	}
@@ -286,7 +320,7 @@ func (s *OTPAuthService) buildUserByEmail(ctx context.Context, emailAddr string)
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("не удалось сгенерировать username")
+	return nil, fmt.Errorf("=5 Ñƒ40;>AÑŒ A35=5Ñ€8Ñ€>20Ñ‚ÑŒ username")
 }
 
 func (s *OTPAuthService) issueSession(ctx context.Context, user *model.User, deviceID, deviceName string, isNewUser bool) (*VerifyCodeResponse, error) {
@@ -308,7 +342,7 @@ func (s *OTPAuthService) issueSession(ctx context.Context, user *model.User, dev
 		LastSeenAt: now,
 		CreatedAt:  now,
 	}
-	// Сначала upsert (одна операция, нет duplicate key). При ошибке (например старая БД) — fallback: delete + insert.
+	// !=0Ñ‡0;0 upsert (>4=0 >?5Ñ€0Ñ†8O, =5Ñ‚ duplicate key). ÐŸÑ€8 >Ñˆ81:5 (=0?Ñ€8<5Ñ€ AÑ‚0Ñ€0O Ð‘Ð”) â€” fallback: delete + insert.
 	if err := s.sessionRepo.UpsertByUserIDAndDeviceID(ctx, session); err != nil {
 		logger.Errorf("issue-session: Upsert session failed, fallback to delete+insert: %v", err)
 		if delErr := s.sessionRepo.DeleteByUserIDAndDeviceID(ctx, user.ID, deviceID); delErr != nil {
@@ -390,8 +424,8 @@ func (s *OTPAuthService) LogoutAllSessions(ctx context.Context, userID string) (
 	return int64(len(ids)), nil
 }
 
-// ValidateRequest проверяет подпись запроса и возвращает user_id. Используется API через POST /internal/validate.
-// timestamp — Unix секунды; допустимое отклонение ±30 сек.
+// ValidateRequest ?Ñ€>25Ñ€O5Ñ‚ ?>4?8AÑŒ 70?Ñ€>A0 8 2>72Ñ€0Ñ‰05Ñ‚ user_id. Ð˜A?>;ÑŒ7Ñƒ5Ñ‚AO API Ñ‡5Ñ€57 POST /internal/validate.
+// timestamp â€” Unix A5:Ñƒ=4Ñ‹; 4>?ÑƒAÑ‚8<>5 >Ñ‚:;>=5=85 �10 <8=ÑƒÑ‚.
 func (s *OTPAuthService) ValidateRequest(ctx context.Context, sessionID, timestamp, signature, method, path, body string) (userID string, err error) {
 	if sessionID == "" || timestamp == "" || signature == "" {
 		logger.Errorf("validate: missing session_id/timestamp/signature")
@@ -402,7 +436,7 @@ func (s *OTPAuthService) ValidateRequest(ctx context.Context, sessionID, timesta
 		return "", ErrInvalidOTP
 	}
 	t := time.Unix(ts, 0)
-	if time.Since(t) > 30*time.Second || time.Until(t) > 30*time.Second {
+	if time.Since(t) > requestTimestampSkew || time.Until(t) > requestTimestampSkew {
 		logger.Errorf("validate: timestamp out of window session_id=%s", maskSessionID(sessionID))
 		return "", ErrInvalidOTP
 	}
@@ -423,9 +457,9 @@ func (s *OTPAuthService) ValidateRequest(ctx context.Context, sessionID, timesta
 		return hmac.Equal([]byte(signature), []byte(expected))
 	}
 	if tryPath(path) {
-		// подпись совпала
+		// ?>4?8AÑŒ A>2?0;0
 	} else if strings.HasPrefix(path, "/api/") && tryPath(path[4:]) {
-		// клиент подписал path без префикса /api (старый фронт или прокси)
+		// :;85=Ñ‚ ?>4?8A0; path 157 ?Ñ€5Ñ„8:A0 /api (AÑ‚0Ñ€Ñ‹9 Ñ„Ñ€>=Ñ‚ 8;8 ?Ñ€>:A8)
 	} else {
 		logger.Errorf("validate: signature mismatch path=%q", path)
 		return "", ErrInvalidOTP

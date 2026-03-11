@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/repository"
 )
 
 type EventPublisher interface {

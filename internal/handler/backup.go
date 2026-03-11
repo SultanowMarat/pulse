@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/middleware"
-	"github.com/messenger/internal/repository"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/middleware"
+	"github.com/pulse/internal/repository"
 )
 
 // BackupHandler creates and restores backups (zip) containing DB dump + mounted data directories.
@@ -38,7 +38,7 @@ func NewBackupHandler(permRepo *repository.PermissionRepository, dbURL, uploadsD
 		uploadsDir:  strings.TrimSpace(uploadsDir),
 		audioDir:    strings.TrimSpace(audioDir),
 		vapidPath:   strings.TrimSpace(vapidPath),
-		zipFileName: "buhchat-backup.zip",
+		zipFileName: "pulse-backup.zip",
 	}
 }
 
@@ -63,7 +63,7 @@ func (h *BackupHandler) CreateBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmp, err := os.CreateTemp("", "buhchat-backup-*.zip")
+	tmp, err := os.CreateTemp("", "pulse-backup-*.zip")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create temp file")
 		return
@@ -110,7 +110,7 @@ func (h *BackupHandler) writeBackupZip(ctx context.Context, out io.Writer) error
 
 	meta := backupMeta{
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		App:       "BuhChat",
+		App:       "pulse",
 		Version:   "1",
 	}
 	if err := writeZipJSON(zw, "meta.json", meta); err != nil {
@@ -190,7 +190,7 @@ func (h *BackupHandler) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "expected multipart/form-data")
 		return
 	}
-	tmp, err := os.CreateTemp("", "buhchat-restore-*.zip")
+	tmp, err := os.CreateTemp("", "pulse-restore-*.zip")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create temp file")
 		return
@@ -236,7 +236,7 @@ func (h *BackupHandler) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "ok",
-		"message": "Рекомендуется перезапустить контейнер API (docker compose restart api), чтобы при необходимости применились миграции и сессии синхронизировались с восстановленной БД.",
+		"message": " 5:><5=4Ñƒ5Ñ‚AO ?5Ñ€570?ÑƒAÑ‚8Ñ‚ÑŒ :>=Ñ‚59=5Ñ€ API (docker compose restart api), Ñ‡Ñ‚>1Ñ‹ ?Ñ€8 =5>1Ñ…>48<>AÑ‚8 ?Ñ€8<5=8;8AÑŒ <83Ñ€0Ñ†88 8 A5AA88 A8=Ñ…Ñ€>=878Ñ€>20;8AÑŒ A 2>AAÑ‚0=>2;5==>9 Ð‘Ð”.",
 	})
 }
 
@@ -374,7 +374,7 @@ func (h *BackupHandler) restoreDB(ctx context.Context, zf *zip.File) error {
 	defer rc.Close()
 
 	// Write SQL to temp file for psql stdin.
-	tmpSQL, err := os.CreateTemp("", "buhchat-db-*.sql")
+	tmpSQL, err := os.CreateTemp("", "pulse-db-*.sql")
 	if err != nil {
 		return err
 	}

@@ -145,6 +145,31 @@ html { scroll-behavior: smooth; }
   background: transparent;
   overflow-anchor: none;
 }
+.chat-area-no-bg {
+  background-image: none !important;
+}
+.chat-messages-scroll,
+.sidebar-favorites-doodle,
+.bg-sidebar,
+.bg-nav {
+  background-image: none !important;
+}
+.chat-no-wallpaper,
+.sidebar-no-wallpaper,
+.chat-no-wallpaper::before,
+.chat-no-wallpaper::after,
+.sidebar-no-wallpaper::before,
+.sidebar-no-wallpaper::after {
+  background-image: none !important;
+}
+.sidebar-favorites-doodle::before,
+.sidebar-favorites-doodle::after,
+.bg-sidebar::before,
+.bg-sidebar::after,
+.bg-nav::before,
+.bg-nav::after {
+  background-image: none !important;
+}
 .chat-scroll-anchor {
   height: 1px;
   overflow-anchor: auto;
@@ -156,6 +181,7 @@ html { scroll-behavior: smooth; }
 /* Фон «Избранное»: белые контурные дудлы на тёмном (как в референсе) */
 .sidebar-favorites-doodle {
   background: transparent;
+  background-image: none !important;
 }
 
 /* Typing dots */

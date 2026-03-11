@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/messenger/internal/logger"
-	"github.com/messenger/internal/push"
+	"github.com/pulse/internal/logger"
+	"github.com/pulse/internal/push"
 	"gopkg.in/yaml.v3"
 )
 
-// loadEnv читает .env только вне production (в контейнере/prod конфиг только из env).
+// loadEnv Ñ‡8Ñ‚05Ñ‚ .env Ñ‚>;ÑŒ:> 2=5 production (2 :>=Ñ‚59=5Ñ€5/prod :>=Ñ„83 Ñ‚>;ÑŒ:> 87 env).
 func loadEnv() {
 	if os.Getenv("APP_ENV") == "production" {
 		return
@@ -66,17 +66,17 @@ func loadEnvFrom(f *os.File) {
 	}
 }
 
-// CacheConfig — настройки кеша (списки чатов, избранное на клиенте).
+// CacheConfig â€” =0AÑ‚Ñ€>9:8 :5Ñˆ0 (A?8A:8 Ñ‡0Ñ‚>2, 871Ñ€0==>5 =0 :;85=Ñ‚5).
 type CacheConfig struct {
 	TTLMinutes int `yaml:"ttl_minutes"`
 }
 
-// RedisConfig — Redis (OTP, rate limit, секреты сессий).
+// RedisConfig â€” Redis (OTP, rate limit, A5:Ñ€5Ñ‚Ñ‹ A5AA89).
 type RedisConfig struct {
 	URL string `yaml:"url"`
 }
 
-// SMTPConfig — SMTP для отправки OTP (Яндекс.Почта и др.).
+// SMTPConfig â€” SMTP 4;O >Ñ‚?Ñ€02:8 OTP (/=45:A.ÐŸ>Ñ‡Ñ‚0 8 4Ñ€.).
 type SMTPConfig struct {
 	Host      string `yaml:"host"`
 	Port      int    `yaml:"port"`
@@ -87,25 +87,25 @@ type SMTPConfig struct {
 	UseTLS    bool   `yaml:"use_tls"`
 }
 
-// DatabaseConfig — настройки подключения к БД.
+// DatabaseConfig â€” =0AÑ‚Ñ€>9:8 ?>4:;ÑŽÑ‡5=8O : Ð‘Ð”.
 type DatabaseConfig struct {
 	URL            string `yaml:"database_url"`
 	MaxConnections int    `yaml:"db_max_connections"`
 }
 
-// Config содержит настройки приложения, БД и кеша.
-// Приоритет: переменные окружения > YAML-файлы > значения по умолчанию.
+// Config A>45Ñ€68Ñ‚ =0AÑ‚Ñ€>9:8 ?Ñ€8;>65=8O, Ð‘Ð” 8 :5Ñˆ0.
+// ÐŸÑ€8>Ñ€8Ñ‚5Ñ‚: ?5Ñ€5<5==Ñ‹5 >:Ñ€Ñƒ65=8O > YAML-Ñ„09;Ñ‹ > 7=0Ñ‡5=8O ?> Ñƒ<>;Ñ‡0=8ÑŽ.
 type Config struct {
-	// Сервер
+	// !5Ñ€25Ñ€
 	ServerAddr   string        `yaml:"server_addr"`
 	ReadTimeout  time.Duration `yaml:"-"`
 	WriteTimeout time.Duration `yaml:"-"`
 	IdleTimeout  time.Duration `yaml:"-"`
 
-	// База данных (загружается из config/database.yaml)
+	// Ð‘070 40==Ñ‹Ñ… (703Ñ€Ñƒ605Ñ‚AO 87 config/database.yaml)
 	Database DatabaseConfig `yaml:"-"`
 
-	// Файлы
+	// $09;Ñ‹
 	UploadDir     string `yaml:"upload_dir"`
 	MaxUploadSize int64  `yaml:"-"`
 
@@ -119,27 +119,27 @@ type Config struct {
 	// CORS
 	CORSAllowedOrigins string `yaml:"cors_allowed_origins"`
 
-	// Логирование
+	// Ð›>38Ñ€>20=85
 	LogLevel string `yaml:"log_level"`
 
-	// Кеш (загружается из config/cache.yaml)
+	// Ðš5Ñˆ (703Ñ€Ñƒ605Ñ‚AO 87 config/cache.yaml)
 	Cache CacheConfig `yaml:"-"`
 
-	// Redis и SMTP (для микросервиса auth и опционально для API)
+	// Redis 8 SMTP (4;O <8:Ñ€>A5Ñ€28A0 auth 8 >?Ñ†8>=0;ÑŒ=> 4;O API)
 	Redis RedisConfig `yaml:"-"`
 	SMTP  SMTPConfig  `yaml:"-"`
 
-	// AuthServiceURL — URL микросервиса авторизации (для API: проверка сессий).
+	// AuthServiceURL â€” URL <8:Ñ€>A5Ñ€28A0 02Ñ‚>Ñ€870Ñ†88 (4;O API: ?Ñ€>25Ñ€:0 A5AA89).
 	AuthServiceURL string `yaml:"-"`
 
-	// PushServiceURL — URL микросервиса пуш-уведомлений. Пустой — пуши отключены.
+	// PushServiceURL â€” URL <8:Ñ€>A5Ñ€28A0 ?ÑƒÑˆ-Ñƒ254><;5=89. ÐŸÑƒAÑ‚>9 â€” ?ÑƒÑˆ8 >Ñ‚:;ÑŽÑ‡5=Ñ‹.
 	PushServiceURL string `yaml:"-"`
-	// PushVAPIDPublicKey — публичный VAPID-ключ для подписки в браузере (отдаётся фронту).
+	// PushVAPIDPublicKey â€” ?Ñƒ1;8Ñ‡=Ñ‹9 VAPID-:;ÑŽÑ‡ 4;O ?>4?8A:8 2 1Ñ€0Ñƒ75Ñ€5 (>Ñ‚40Ñ‘Ñ‚AO Ñ„Ñ€>=Ñ‚Ñƒ).
 	PushVAPIDPublicKey string `yaml:"-"`
 
-	// FileServiceURL — URL микросервиса файлов (upload/serve). Пустой — файлы обрабатываются в API.
+	// FileServiceURL â€” URL <8:Ñ€>A5Ñ€28A0 Ñ„09;>2 (upload/serve). ÐŸÑƒAÑ‚>9 â€” Ñ„09;Ñ‹ >1Ñ€010Ñ‚Ñ‹20ÑŽÑ‚AO 2 API.
 	FileServiceURL string `yaml:"-"`
-	// AudioServiceURL — URL микросервиса голосовых сообщений (upload/serve).
+	// AudioServiceURL â€” URL <8:Ñ€>A5Ñ€28A0 3>;>A>2Ñ‹Ñ… A>>1Ñ‰5=89 (upload/serve).
 	AudioServiceURL string `yaml:"-"`
 	// App status flags for maintenance/degradation banner in clients.
 	AppMaintenance   bool   `yaml:"-"`
@@ -148,10 +148,10 @@ type Config struct {
 	AppStatusMessage string `yaml:"-"`
 }
 
-// DatabaseURL возвращает строку подключения к БД (удобно для кода, ожидающего cfg.DatabaseURL).
+// DatabaseURL 2>72Ñ€0Ñ‰05Ñ‚ AÑ‚Ñ€>:Ñƒ ?>4:;ÑŽÑ‡5=8O : Ð‘Ð” (Ñƒ4>1=> 4;O :>40, >6840ÑŽÑ‰53> cfg.DatabaseURL).
 func (c *Config) DatabaseURL() string { return c.Database.URL }
 
-// DBMaxConnections возвращает максимальное число соединений в пуле.
+// DBMaxConnections 2>72Ñ€0Ñ‰05Ñ‚ <0:A8<0;ÑŒ=>5 Ñ‡8A;> A>548=5=89 2 ?Ñƒ;5.
 func (c *Config) DBMaxConnections() int {
 	if c.Database.MaxConnections <= 0 {
 		return 20
@@ -159,7 +159,7 @@ func (c *Config) DBMaxConnections() int {
 	return c.Database.MaxConnections
 }
 
-// yamlConfig — промежуточная структура для парсинга app YAML (без БД).
+// yamlConfig â€” ?Ñ€><56ÑƒÑ‚>Ñ‡=0O AÑ‚Ñ€Ñƒ:Ñ‚ÑƒÑ€0 4;O ?0Ñ€A8=30 app YAML (157 Ð‘Ð”).
 type yamlConfig struct {
 	ServerAddr         string `yaml:"server_addr"`
 	ReadTimeout        int    `yaml:"read_timeout"`
@@ -176,11 +176,11 @@ type yamlConfig struct {
 	LogLevel           string `yaml:"log_level"`
 }
 
-// Load загружает конфигурацию.
-// Сначала подгружаются переменные из .env (если есть), затем YAML и env (env имеет приоритет).
+// Load 703Ñ€Ñƒ605Ñ‚ :>=Ñ„83ÑƒÑ€0Ñ†8ÑŽ.
+// !=0Ñ‡0;0 ?>43Ñ€Ñƒ60ÑŽÑ‚AO ?5Ñ€5<5==Ñ‹5 87 .env (5A;8 5AÑ‚ÑŒ), 70Ñ‚5< YAML 8 env (env 8<55Ñ‚ ?Ñ€8>Ñ€8Ñ‚5Ñ‚).
 func Load() *Config {
 	loadEnv()
-	// Значения по умолчанию
+	// Ð—=0Ñ‡5=8O ?> Ñƒ<>;Ñ‡0=8ÑŽ
 	yc := yamlConfig{
 		ServerAddr:         ":8080",
 		ReadTimeout:        15,
@@ -197,7 +197,7 @@ func Load() *Config {
 		LogLevel:           "info",
 	}
 
-	// Загрузка конфигурации приложения: CONFIG_PATH → config/api.yaml / config/auth.yaml
+	// Ð—03Ñ€Ñƒ7:0 :>=Ñ„83ÑƒÑ€0Ñ†88 ?Ñ€8;>65=8O: CONFIG_PATH â†’ config/api.yaml / config/auth.yaml
 	appPaths := []string{os.Getenv("CONFIG_PATH"), "config/api.yaml", "config/auth.yaml"}
 	for _, path := range appPaths {
 		if path == "" {
@@ -208,15 +208,15 @@ func Load() *Config {
 			continue
 		}
 		if err := yaml.Unmarshal(data, &yc); err != nil {
-			logger.Errorf("config: ошибка парсинга %s: %v (используются значения по умолчанию)", path, err)
+			logger.Errorf("config: >Ñˆ81:0 ?0Ñ€A8=30 %s: %v (8A?>;ÑŒ7ÑƒÑŽÑ‚AO 7=0Ñ‡5=8O ?> Ñƒ<>;Ñ‡0=8ÑŽ)", path, err)
 		} else {
-			logger.Infof("config: загружен %s", path)
+			logger.Infof("config: 703Ñ€Ñƒ65= %s", path)
 		}
 		break
 	}
 
-	// Загрузка конфигурации БД: DATABASE_CONFIG_PATH > config/database.yaml > config/database.yaml.example
-	dbURL := "postgres://messenger:messenger_secret@localhost:5432/messenger?sslmode=disable"
+	// Ð—03Ñ€Ñƒ7:0 :>=Ñ„83ÑƒÑ€0Ñ†88 Ð‘Ð”: DATABASE_CONFIG_PATH > config/database.yaml > config/database.yaml.example
+	dbURL := "postgres://pulse:pulse_secret@localhost:5432/pulse?sslmode=disable"
 	dbMaxConn := 20
 	dbPaths := []string{os.Getenv("DATABASE_CONFIG_PATH"), "config/database.yaml", "config/database.yaml.example"}
 	for _, path := range dbPaths {
@@ -232,7 +232,7 @@ func Load() *Config {
 			MaxConnections int    `yaml:"db_max_connections"`
 		}
 		if err := yaml.Unmarshal(data, &dc); err != nil {
-			logger.Errorf("config: ошибка парсинга %s: %v (БД: значения по умолчанию)", path, err)
+			logger.Errorf("config: >Ñˆ81:0 ?0Ñ€A8=30 %s: %v (Ð‘Ð”: 7=0Ñ‡5=8O ?> Ñƒ<>;Ñ‡0=8ÑŽ)", path, err)
 		} else {
 			if dc.URL != "" {
 				dbURL = dc.URL
@@ -240,7 +240,7 @@ func Load() *Config {
 			if dc.MaxConnections > 0 {
 				dbMaxConn = dc.MaxConnections
 			}
-			logger.Infof("config: загружен %s", path)
+			logger.Infof("config: 703Ñ€Ñƒ65= %s", path)
 		}
 		break
 	}
@@ -250,7 +250,7 @@ func Load() *Config {
 		dbMaxConn = 20
 	}
 
-	// Загрузка конфигурации кеша: CACHE_CONFIG_PATH > config/cache.yaml
+	// Ð—03Ñ€Ñƒ7:0 :>=Ñ„83ÑƒÑ€0Ñ†88 :5Ñˆ0: CACHE_CONFIG_PATH > config/cache.yaml
 	cacheDefault := 10
 	cachePaths := []string{os.Getenv("CACHE_CONFIG_PATH"), "config/cache.yaml"}
 	for _, path := range cachePaths {
@@ -265,13 +265,13 @@ func Load() *Config {
 			TTLMinutes int `yaml:"ttl_minutes"`
 		}
 		if err := yaml.Unmarshal(data, &cc); err != nil {
-			logger.Errorf("config: ошибка парсинга %s: %v (кеш: значение по умолчанию)", path, err)
+			logger.Errorf("config: >Ñˆ81:0 ?0Ñ€A8=30 %s: %v (:5Ñˆ: 7=0Ñ‡5=85 ?> Ñƒ<>;Ñ‡0=8ÑŽ)", path, err)
 		} else {
 			cacheDefault = cc.TTLMinutes
 			if cacheDefault <= 0 {
 				cacheDefault = 10
 			}
-			logger.Infof("config: загружен %s", path)
+			logger.Infof("config: 703Ñ€Ñƒ65= %s", path)
 		}
 		break
 	}
@@ -330,11 +330,11 @@ func Load() *Config {
 
 	if os.Getenv("APP_ENV") == "production" {
 		if cfg.CORSAllowedOrigins == "" || cfg.CORSAllowedOrigins == "*" {
-			logger.Errorf("config: в production задайте CORS_ALLOWED_ORIGINS (явный список origins, не *)")
-			// Не роняем процесс — сайт должен открываться; CORS можно задать позже
+			logger.Errorf("config: 2 production 70409Ñ‚5 CORS_ALLOWED_ORIGINS (O2=Ñ‹9 A?8A>: origins, =5 *)")
+			// 5 Ñ€>=O5< ?Ñ€>Ñ†5AA â€” A09Ñ‚ 4>;65= >Ñ‚:Ñ€Ñ‹20Ñ‚ÑŒAO; CORS <>6=> 7040Ñ‚ÑŒ ?>765
 		}
-		if strings.Contains(cfg.Database.URL, "messenger_secret") && strings.Contains(cfg.Database.URL, "localhost") {
-			logger.Errorf("config: в production задайте DATABASE_URL (не используйте дефолт для разработки)")
+		if strings.Contains(cfg.Database.URL, "pulse_secret") && strings.Contains(cfg.Database.URL, "localhost") {
+			logger.Errorf("config: 2 production 70409Ñ‚5 DATABASE_URL (=5 8A?>;ÑŒ7Ñƒ9Ñ‚5 45Ñ„>;Ñ‚ 4;O Ñ€07Ñ€01>Ñ‚:8)")
 			os.Exit(1)
 		}
 	}
@@ -342,7 +342,7 @@ func Load() *Config {
 	return cfg
 }
 
-// envStr возвращает значение переменной окружения или fallback.
+// envStr 2>72Ñ€0Ñ‰05Ñ‚ 7=0Ñ‡5=85 ?5Ñ€5<5==>9 >:Ñ€Ñƒ65=8O 8;8 fallback.
 func envStr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -350,7 +350,7 @@ func envStr(key, fallback string) string {
 	return fallback
 }
 
-// envInt возвращает числовое значение переменной окружения или fallback.
+// envInt 2>72Ñ€0Ñ‰05Ñ‚ Ñ‡8A;>2>5 7=0Ñ‡5=85 ?5Ñ€5<5==>9 >:Ñ€Ñƒ65=8O 8;8 fallback.
 func envInt(key string, fallback int) int {
 	v := os.Getenv(key)
 	if v == "" {
