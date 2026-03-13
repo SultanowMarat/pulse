@@ -3,6 +3,7 @@ import { useAuthStore, useChatStore, useThemeStore } from './store';
 import Auth from './pages/Auth';
 import Pulse from './pages/Pulse';
 import { registerPushIfEnabled, requestNotificationPermissionForPWA, startPushBackgroundMaintenance } from './push';
+import { setupMobileViewportManager } from './mobileViewport';
 
 export default function App() {
   const { isAuthenticated, init } = useAuthStore();
@@ -11,6 +12,9 @@ export default function App() {
   useEffect(() => {
     themeInit();
   }, [themeInit]);
+  useEffect(() => {
+    return setupMobileViewportManager();
+  }, []);
   useEffect(() => {
     init();
   }, [init]);

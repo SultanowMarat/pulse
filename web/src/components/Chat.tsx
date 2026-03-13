@@ -3,7 +3,17 @@ import { useAuthStore, useChatStore } from '../store';
 import { Avatar, Modal, IconSend, IconPaperclip, IconMicrophone, IconCheck, IconCheckDouble, IconFile, IconDownload, IconReply, IconEdit, IconTrash, IconPin, IconForward, IconX, IconBack, IconSearch, IconStarOutline, IconStarFilled, IconSmile, IconChevronUp, IconChevronDown, TypingDots, formatTime, formatFileSize, IconPlay, IconPause, IconVolume } from './ui';
 import UserCard from './UserCard';
 import type { Message, ChatWithLastMessage } from '../types';
+import { areMessagesFromSameSender, isMessageFromUser } from '../messageOwnership';
 
+function normalizeID(v: string | null | undefined): string {
+  return String(v || '').trim().toLowerCase();
+}
+
+function isSameID(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeID(a);
+  const nb = normalizeID(b);
+  return na !== '' && na === nb;
+}
 /** Для отображения и скачивания: "+" в имени часто приходит вместо пробела (URL-кодирование). */
 function normalizeFileDisplayName(name: string | undefined): string {
   return name ? name.replace(/\+/g, ' ').trim() : '';
@@ -290,7 +300,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     const isInitialLoad = prevLen.current === 0;
     prevLen.current = chatMessages.length;
     const last = chatMessages[chatMessages.length - 1];
-    const lastFromMe = !!last && last.sender_id === user?.id;
+    const lastFromMe = !!last && isMessageFromUser(last, user);
     if (!(isInitialLoad || stickToBottomRef.current || lastFromMe)) return;
     scheduleScrollToBottom('auto');
   }, [chatMessages, scheduleScrollToBottom, user?.id]);
@@ -910,8 +920,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           {chatMessages.map((msg, i) => {
             const prev = chatMessages[i - 1];
             const showDate = !prev || new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
-            const isOwn = msg.sender_id === user?.id;
-            const showAvatar = !isOwn && (!chatMessages[i + 1] || chatMessages[i + 1].sender_id !== msg.sender_id);
+            const isOwn = isMessageFromUser(msg, user);
+            const showAvatar = !isOwn && (!chatMessages[i + 1] || !areMessagesFromSameSender(chatMessages[i + 1], msg));
 
             return (
               <div key={msg.id} id={`msg-${msg.id}`} className={`min-w-0 overflow-hidden ${highlightMsgId === msg.id ? 'animate-msg-highlight rounded-compass' : ''}`}>
@@ -950,14 +960,14 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
             <div className="bg-white dark:bg-dark-elevated rounded-compass shadow-compass border border-surface-border dark:border-dark-border py-1 min-w-[160px] animate-dialog">
               <CtxItem icon={<IconReply />} label="Ответить" onClick={() => { setReplyTo(ctxMenu.msg); setCtxMenu(null); }} />
               <CtxItem icon={<IconForward />} label="Переслать" onClick={() => { setForwardMsg(ctxMenu.msg); setCtxMenu(null); }} />
-              {ctxMenu.msg.sender_id === user?.id && ctxMenu.msg.content_type === 'text' && (
+              {isMessageFromUser(ctxMenu.msg, user) && ctxMenu.msg.content_type === 'text' && (
                 <CtxItem icon={<IconEdit />} label="Редактировать" onClick={() => { setEditingMessage(ctxMenu.msg); setCtxMenu(null); }} />
               )}
               {pinned.some((p) => p.message_id === ctxMenu.msg.id)
                 ? <CtxItem icon={<IconPin />} label="Открепить" onClick={() => { unpinMessage(activeChatId, ctxMenu.msg.id); setCtxMenu(null); }} />
                 : <CtxItem icon={<IconPin />} label="Закрепить" onClick={() => { pinMessage(activeChatId, ctxMenu.msg.id); setCtxMenu(null); }} />
               }
-              {ctxMenu.msg.sender_id === user?.id && (
+              {isMessageFromUser(ctxMenu.msg, user) && (
                 <CtxItem icon={<IconTrash />} label="Удалить" danger onClick={() => { deleteMessage(ctxMenu.msg.id); setCtxMenu(null); }} />
               )}
             </div>
@@ -1534,4 +1544,6 @@ function getOnline(c: ChatWithLastMessage, myId: string, o: Record<string, boole
   const other = c.members.find((m) => m.id !== myId);
   return other ? (o[other.id] ?? other.is_online) : undefined;
 }
+
+
 

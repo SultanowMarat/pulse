@@ -3,6 +3,7 @@ import { Avatar, TypingDots, formatTime } from '../ui';
 import type { ChatWithLastMessage } from '../../types';
 import IconBellOff from './IconBellOff';
 import { getChatName, getChatOnline } from './chatMeta';
+import { isMessageFromUserId } from '../../messageOwnership';
 
 interface ChatItemProps {
   chat: ChatWithLastMessage;
@@ -96,7 +97,7 @@ export default function ChatItem({
                 <span className="italic">{'\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u0443\u0434\u0430\u043B\u0435\u043D\u043E'}</span>
               ) : (
                 <>
-                  {lastMsg.sender_id === myId && <span className={active ? 'text-white/70' : 'text-sidebar-text/50'}>{'\u0412\u044B: '}</span>}
+                  {isMessageFromUserId(lastMsg, myId) && <span className={active ? 'text-white/70' : 'text-sidebar-text/50'}>{'\u0412\u044B: '}</span>}
                   {lastMsg.content_type === 'image'
                     ? '\uD83D\uDCF7 \u0424\u043E\u0442\u043E'
                     : lastMsg.content_type === 'file'

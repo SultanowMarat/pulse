@@ -5,6 +5,7 @@ import { updateFaviconBadge } from './faviconBadge';
 import { getWebSocketBase } from './serverUrl';
 import { unsubscribePushIfEnabled } from './push';
 import type { ChatWithLastMessage, Message, UserPublic, PinnedMessage } from './types';
+import { isMessageFromUserId } from './messageOwnership';
 
 /** "+" в имени файла часто приходит вместо пробела — нормализуем при получении с сервера. */
 function countMatches(input: string, re: RegExp): number {
@@ -92,6 +93,16 @@ function maybeDecodeMojibake(input: string): string {
   const restored = restoreLowByteCyrillic(best);
   if (score(restored) > bestScore) return restored;
   return best;
+}
+
+function normalizeID(v: string | null | undefined): string {
+  return String(v || '').trim().toLowerCase();
+}
+
+function isSameID(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeID(a);
+  const nb = normalizeID(b);
+  return na !== '' && na === nb;
 }
 
 function normalizeUserText(user: UserPublic): UserPublic {
@@ -579,6 +590,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const optimistic = existing.filter((m) => m.id.startsWith('opt-'));
       const merged = [...msgs];
       for (const opt of optimistic) {
+        const optClientID = normalizeID(opt.client_msg_id);
+        const hasServerPair = optClientID !== '' && merged.some((m) => normalizeID(m.client_msg_id) === optClientID);
+        if (hasServerPair) continue;
         if (!merged.some((m) => m.id === opt.id)) merged.push(opt);
       }
       merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -1193,7 +1207,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     switch (type) {
       case 'new_message': {
         const msg = normalizeMessageFileName(payload as Message);
-        const fromMe = msg.sender_id === myId;
+        const fromMe = isMessageFromUserId(msg, myId);
         const me = useAuthStore.getState().user;
         const clientMsgId = (msg.client_msg_id || '').trim();
         set((s) => {
@@ -1201,28 +1215,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const existsByID = chatMsgs.some((m) => m.id === msg.id);
           let nextList = chatMsgs;
           if (!existsByID) {
-            if (fromMe) {
-              let replaceIndex = -1;
-              if (clientMsgId) {
-                replaceIndex = chatMsgs.findIndex((m) => m.client_msg_id === clientMsgId || m.id === `opt-${clientMsgId}`);
-              }
-              if (replaceIndex < 0) {
-                const isVoice = msg.content_type === 'voice';
-                replaceIndex = chatMsgs.findIndex((m) => {
-                  if (!m.id.startsWith('opt-')) return false;
-                  if (isVoice && m.content_type !== 'voice') return false;
-                  if (!isVoice && m.content_type === 'voice') return false;
-                  if (msg.file_url && m.file_url && m.file_url !== msg.file_url) return false;
-                  return true;
-                });
-              }
-              if (replaceIndex >= 0) {
-                const out = [...chatMsgs];
-                out[replaceIndex] = msg;
-                nextList = out;
-              } else {
-                nextList = [...chatMsgs, msg];
-              }
+            let replaceIndex = -1;
+            if (clientMsgId) {
+              replaceIndex = chatMsgs.findIndex((m) => m.client_msg_id === clientMsgId || m.id === `opt-${clientMsgId}`);
+            }
+            if (replaceIndex < 0) {
+              const isVoice = msg.content_type === 'voice';
+              replaceIndex = chatMsgs.findIndex((m) => {
+                if (!m.id.startsWith('opt-')) return false;
+                if (isVoice && m.content_type !== 'voice') return false;
+                if (!isVoice && m.content_type === 'voice') return false;
+                if (msg.file_url && m.file_url && m.file_url !== msg.file_url) return false;
+                return true;
+              });
+            }
+            if (replaceIndex >= 0) {
+              const out = [...chatMsgs];
+              const prev = out[replaceIndex];
+              // If we matched a local optimistic message, keep its sender id when server payload is inconsistent.
+              const mergedMsg = isMessageFromUserId(prev, myId) && !isMessageFromUserId(msg, myId)
+                ? { ...msg, sender_id: prev.sender_id, sender: prev.sender || msg.sender }
+                : msg;
+              out[replaceIndex] = mergedMsg;
+              nextList = out;
             } else {
               nextList = [...chatMsgs, msg];
             }
@@ -1273,7 +1288,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
 
           const typingArr = (s.typingUsers[msg.chat_id] || []).filter((id) => id !== msg.sender_id);
-          const nextPending = fromMe && clientMsgId
+          const nextPending = clientMsgId
             ? s.pendingMessages.filter((p) => p.clientMsgId !== clientMsgId)
             : s.pendingMessages;
 
@@ -1297,7 +1312,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (mentionedMe) {
           get().setNotification(`Вас упомянули в чате: ${chatTitle}`);
         }
-        if (activeChatId === msg.chat_id && msg.sender_id !== myId) {
+        if (activeChatId === msg.chat_id && !isMessageFromUserId(msg, myId)) {
           get().markAsRead(msg.chat_id);
         }
 
@@ -1568,7 +1583,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           return {
             messages: {
               ...s.messages,
-              [chat_id]: msgs.map((m) => (m.sender_id === myId ? { ...m, status: 'read' as const } : m)),
+              [chat_id]: msgs.map((m) => (isMessageFromUserId(m, myId) ? { ...m, status: 'read' as const } : m)),
             },
           };
         });
@@ -1612,3 +1627,4 @@ export const useChatStore = create<ChatState>((set, get) => ({
     get().updateElectronBadge();
   },
 }));
+

@@ -3,7 +3,17 @@ import { useAuthStore, useChatStore } from '../store';
 import { Avatar, Modal, IconSearch, IconUsers, IconEdit, IconTrash, IconX, IconMenu, formatTime, TypingDots } from './ui';
 import type { UserPublic, ChatWithLastMessage, Message } from '../types';
 import * as api from '../api';
+import { isMessageFromUserId } from '../messageOwnership';
 
+function normalizeID(v: string | null | undefined): string {
+  return String(v || '').trim().toLowerCase();
+}
+
+function isSameID(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeID(a);
+  const nb = normalizeID(b);
+  return na !== '' && na === nb;
+}
 interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; /** Когда нав-рейл скрыт — показать кнопку «Показать панель» */ navHidden?: boolean; onShowNav?: () => void; }
 
 type ChatListTab = 'all' | 'personal' | 'favorites';
@@ -130,7 +140,7 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     const map: Record<string, ChatWithLastMessage> = {};
     for (const c of chats) {
       if (c.chat.chat_type !== 'personal') continue;
-      const other = c.members.find((m) => m.id !== myId);
+      const other = c.members.find((m) => !isSameID(m.id, myId));
       if (other) map[other.id] = c;
     }
     return map;
@@ -483,12 +493,12 @@ function SidebarBtn({ tip, onClick, children }: { tip: string; onClick: () => vo
 function getChatName(c: ChatWithLastMessage, myId: string): string {
   if (c.chat.chat_type === 'notes') return c.chat.name;
   if (c.chat.chat_type === 'group') return c.chat.name;
-  return c.members.find((m) => m.id !== myId)?.username || 'Чат';
+  return c.members.find((m) => !isSameID(m.id, myId))?.username || 'Чат';
 }
 
 function getChatOnline(c: ChatWithLastMessage, myId: string, o: Record<string, boolean>): boolean | undefined {
   if (c.chat.chat_type === 'group' || c.chat.chat_type === 'notes') return undefined;
-  const other = c.members.find((m) => m.id !== myId);
+  const other = c.members.find((m) => !isSameID(m.id, myId));
   return other ? (o[other.id] ?? other.is_online) : undefined;
 }
 
@@ -623,7 +633,7 @@ function ChatItem({ chat, active, myId, typing, onlineUsers, onClick, onContextM
             ) : lastMsg ? (
               lastMsg.is_deleted ? <span className="italic">Сообщение удалено</span> : (
                 <>
-                  {lastMsg.sender_id === myId && <span className={active ? 'text-white/70' : 'text-sidebar-text/50'}>Вы: </span>}
+                  {isMessageFromUserId(lastMsg, myId) && <span className={active ? 'text-white/70' : 'text-sidebar-text/50'}>Вы: </span>}
                   {lastMsg.content_type === 'image' ? '📷 Фото' : lastMsg.content_type === 'file' ? '📎 Файл' : lastMsg.content_type === 'voice' ? '🎤 Голосовое' : lastMsg.content}
                 </>
               )
@@ -777,3 +787,4 @@ function RenameGroupModal({ chat, onClose }: { chat: ChatWithLastMessage; onClos
     </div>
   );
 }
+

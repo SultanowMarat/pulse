@@ -3,21 +3,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-function syncAppHeightVar() {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  const h = Math.round(window.visualViewport?.height ?? window.innerHeight);
-  document.documentElement.style.setProperty('--app-height', `${h}px`);
-}
-
-if (typeof window !== 'undefined') {
-  syncAppHeightVar();
-  window.addEventListener('resize', syncAppHeightVar, { passive: true });
-  window.addEventListener('orientationchange', syncAppHeightVar, { passive: true });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', syncAppHeightVar, { passive: true });
-  }
-}
-
 // PWA: регистрация SW для установки на Android, iOS, Windows, macOS (push подключается отдельно в push.ts)
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -50,7 +35,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, Error
 
       return (
         <div style={{
-          minHeight: '100vh',
+          minHeight: 'var(--app-height)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
