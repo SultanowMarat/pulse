@@ -1,12 +1,85 @@
-import React from 'react';
+﻿import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { APP_VERSION } from './appVersion';
+import { useChatStore } from './store';
 
-// PWA: регистрация SW для установки на Android, iOS, Windows, macOS (push подключается отдельно в push.ts)
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  const VERSION_KEY = 'pulse_frontend_version';
+  const SW_PATH = `/sw.js?v=${encodeURIComponent(APP_VERSION)}`;
+
+  const forceReloadWithVersion = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_fv', APP_VERSION);
+      window.location.replace(url.toString());
+    } catch {
+      window.location.reload();
+    }
+  };
+
+  const clearClientCaches = async () => {
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch {
+        // ignore cache cleanup errors
+      }
+    }
+  };
+
+  const storedVersion = (() => {
+    try {
+      return localStorage.getItem(VERSION_KEY) || '';
+    } catch {
+      return '';
+    }
+  })();
+
+  if (storedVersion && storedVersion !== APP_VERSION) {
+    try {
+      localStorage.setItem(VERSION_KEY, APP_VERSION);
+    } catch {
+      // ignore
+    }
+    clearClientCaches().finally(forceReloadWithVersion);
+  } else {
+    try {
+      localStorage.setItem(VERSION_KEY, APP_VERSION);
+    } catch {
+      // ignore
+    }
+  }
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      forceReloadWithVersion();
+    });
+
+    navigator.serviceWorker
+      .register(SW_PATH, { scope: '/' })
+      .then(async (reg) => {
+        await reg.update().catch(() => {});
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      })
+      .catch(() => {});
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pulse-desktop-open-chat', (event: Event) => {
+    const chatId = (event as CustomEvent<{ chatId?: string }>).detail?.chatId;
+    if (!chatId || !chatId.trim()) return;
+    const id = chatId.trim();
+    const state = useChatStore.getState();
+    state.setActiveChat(id);
+    state.markAsRead(id);
+    window.focus();
   });
 }
 
@@ -135,4 +208,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
-

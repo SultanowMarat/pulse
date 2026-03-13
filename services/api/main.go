@@ -230,6 +230,7 @@ func main() {
 		r.Get("/api/users/me", userH.GetProfile)
 		r.Put("/api/users/me", userH.UpdateProfile)
 		r.Get("/api/users", userH.GetUsers)
+		r.Get("/api/users/page", userH.GetUsersPage)
 		r.Get("/api/users/employees", userH.GetEmployees)
 		r.Get("/api/users/employees/page", userH.GetEmployeesPage)
 		r.Post("/api/users", userH.CreateUser)

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as api from './api';
 import { CACHE_TTL_MS } from './config';
 import { updateFaviconBadge } from './faviconBadge';
-import { getWebSocketBase } from './serverUrl';
+import { getApiBase, getWebSocketBase } from './serverUrl';
 import { unsubscribePushIfEnabled } from './push';
 import type { ChatWithLastMessage, Message, UserPublic, PinnedMessage } from './types';
 import { isMessageFromUserId } from './messageOwnership';
@@ -93,6 +93,17 @@ function maybeDecodeMojibake(input: string): string {
   const restored = restoreLowByteCyrillic(best);
   if (score(restored) > bestScore) return restored;
   return best;
+}
+
+function resolveAbsoluteAssetUrl(url?: string | null): string | undefined {
+  if (!url || typeof url !== 'string') return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const base = getApiBase();
+  if (!base) return undefined;
+  const normalizedBase = base.replace(/\/$/, '');
+  return trimmed.startsWith('/') ? `${normalizedBase}${trimmed}` : `${normalizedBase}/${trimmed}`;
 }
 
 function normalizeID(v: string | null | undefined): string {
@@ -579,6 +590,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       get().fetchMessages(chatId);
       get().markAsRead(chatId);
       get().fetchPinnedMessages(chatId);
+      if (typeof window !== 'undefined') {
+        const electronApi = (window as unknown as {
+          electronAPI?: {
+            dismissNotifications?: (opts?: { chatId?: string }) => void;
+          };
+        }).electronAPI;
+        electronApi?.dismissNotifications?.({ chatId });
+      }
     }
   },
 
@@ -704,7 +723,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const total = get().chats.reduce((n, c) => n + (c.unread_count || 0), 0);
     document.title = total > 0 ? `(${total}) pulse` : 'pulse';
     updateFaviconBadge(total);
-    const api = (window as unknown as { electronAPI?: { setBadgeCount?: (n: number) => void } }).electronAPI;
+    const api = (window as unknown as {
+      electronAPI?: {
+        setBadgeCount?: (n: number) => void;
+        showNotification?: (opts: { title: string; body: string; chatId?: string; sender?: string; avatarUrl?: string }) => void;
+        dismissNotifications?: (opts?: { chatId?: string }) => void;
+      };
+    }).electronAPI;
     if (api?.setBadgeCount) {
       api.setBadgeCount(total);
       return;
@@ -1324,13 +1349,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
               : msg.content_type === 'voice'
                 ? 'Голосовое сообщение'
                 : (msg.file_name || 'Файл').trim().slice(0, 80);
-          const electronApi = (window as unknown as { electronAPI?: { showNotification?: (opts: { title: string; body: string }) => void } }).electronAPI;
+          const senderName = (msg.sender?.username || '').trim();
+          const avatarUrl = resolveAbsoluteAssetUrl(msg.sender?.avatar_url || chat?.chat.avatar_url || '');
+          const bodyWithSender = senderName ? `${senderName}: ${body}` : body;
+          const electronApi = (window as unknown as {
+            electronAPI?: {
+              showNotification?: (opts: {
+                title: string;
+                body: string;
+                chatId?: string;
+                sender?: string;
+                avatarUrl?: string;
+              }) => void;
+            };
+          }).electronAPI;
           if (electronApi?.showNotification) {
-            electronApi.showNotification({ title: chatTitle, body });
+            electronApi.showNotification({
+              title: chatTitle,
+              body,
+              chatId: msg.chat_id,
+              sender: senderName,
+              avatarUrl,
+            });
           } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            const n = new Notification(chatTitle, { body });
+            const n = new Notification(chatTitle, {
+              body: bodyWithSender,
+              icon: avatarUrl || '/icons/icon-192.png',
+              badge: '/icons/icon-192.png',
+              tag: `chat-${msg.chat_id}`,
+            });
             n.onclick = () => {
               window.focus();
+              get().setActiveChat(msg.chat_id);
+              get().markAsRead(msg.chat_id);
               n.close();
             };
           }

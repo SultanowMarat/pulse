@@ -160,7 +160,7 @@ func (h *AdminHandler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error_code": "SMTP_NOT_CONFIGURED",
-			"error":      "ÐŸ>Ñ‡Ñ‚0 =5 =0AÑ‚Ñ€>5=0. Ð—0?>;=8Ñ‚5 SMTP-?>;O.",
+			"error":      "Почта не настроена. Заполните SMTP-поля.",
 		})
 		return
 	}
@@ -171,7 +171,7 @@ func (h *AdminHandler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"error_code": "SMTP_SEND_FAILED",
-			"error":      "5 Ñƒ40;>AÑŒ >Ñ‚?Ñ€028Ñ‚ÑŒ Ñ‚5AÑ‚>2>5 ?8AÑŒ<>",
+			"error":      "Не удалось отправить тестовое письмо",
 			"detail":     err.Error(),
 		})
 		return

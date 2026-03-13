@@ -6,6 +6,7 @@
     <InstallerPlatform>x64</InstallerPlatform>
     <PublishDir>$(MSBuildThisFileDirectory)..\..\src\Pulse.Desktop\bin\$(Configuration)\net8.0-windows\win-x64\publish\</PublishDir>
     <PayloadDir>$(MSBuildThisFileDirectory)payload\</PayloadDir>
+    <DistDir>$(MSBuildThisFileDirectory)..\..\dist\windows\</DistDir>
     <DefineConstants>WrapperAppName=$(WrapperAppName);WrapperAppId=$(WrapperAppId);WrapperCompanyName=$(WrapperCompanyName);WrapperDescription=$(WrapperDescription);WrapperVersion=$(WrapperVersion);WrapperExeName=$(WrapperAppId).exe;PayloadDir=$(PayloadDir);WebView2Bootstrapper=$(MSBuildThisFileDirectory)..\redist\MicrosoftEdgeWebView2Setup.exe;WrapperAppIcon=$(WrapperAppIconPath)</DefineConstants>
     <OutputName>$(WrapperAppId)-$(WrapperVersion)</OutputName>
   </PropertyGroup>
@@ -23,5 +24,23 @@
       Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishDir=$(PublishDir);PublishSingleFile=true;SelfContained=false" />
     <Copy SourceFiles="$(PublishDir)$(WrapperAppId).exe"
           DestinationFolder="$(PayloadDir)" />
+  </Target>
+
+  <Target Name="CleanOldMsiArtifacts" BeforeTargets="BeforeBuild">
+    <ItemGroup>
+      <OldBinMsi Include="$(MSBuildThisFileDirectory)bin\**\$(WrapperAppId)-*.msi" />
+      <OldObjMsi Include="$(MSBuildThisFileDirectory)obj\**\$(WrapperAppId)-*.msi" />
+      <OldDistMsi Include="$(DistDir)$(WrapperAppId)-*.msi" />
+    </ItemGroup>
+
+    <Delete Files="@(OldBinMsi);@(OldObjMsi);@(OldDistMsi)" ContinueOnError="true" />
+  </Target>
+
+  <Target Name="SyncDistArtifacts" AfterTargets="Build">
+    <MakeDir Directories="$(DistDir)" />
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(DistDir)" />
+    <Copy SourceFiles="$(PublishDir)$(WrapperAppId).exe"
+          DestinationFolder="$(DistDir)" />
   </Target>
 </Project>

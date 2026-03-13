@@ -218,6 +218,13 @@ type EmployeesPageResponse struct {
 	Offset int              `json:"offset"`
 }
 
+type UsersPageResponse struct {
+	Users  []model.UserPublic `json:"users"`
+	Total  int                `json:"total"`
+	Limit  int                `json:"limit"`
+	Offset int                `json:"offset"`
+}
+
 type EmployeePublic struct {
 	model.UserPublic
 	Role string `json:"role"`
@@ -320,6 +327,62 @@ func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetUsersPage returns users for sidebar in pages (for "All" tab lazy loading).
+// Query params:
+// - q: optional search by username/email/phone
+// - limit, offset
+func (h *UserHandler) GetUsersPage(w http.ResponseWriter, r *http.Request) {
+	currentUserID := middleware.GetUserID(r.Context())
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	limit := 50
+	offset := 0
+	if v := strings.TrimSpace(r.URL.Query().Get("limit")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	if v := strings.TrimSpace(r.URL.Query().Get("offset")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			offset = n
+		}
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	res, err := h.userRepo.ListPage(r.Context(), q, limit, offset, "username", "asc")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list users failed")
+		return
+	}
+
+	users := make([]model.UserPublic, 0, len(res.Users))
+	for _, u := range res.Users {
+		if u.ID == currentUserID {
+			continue
+		}
+		users = append(users, u.ToPublic())
+	}
+	total := res.Total
+	if total > 0 {
+		total--
+	}
+
+	writeJSON(w, http.StatusOK, UsersPageResponse{
+		Users:  users,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 // CreateUserRequest ��‚¬â€ A>740=85 ?>;Ã‘Å’7>20Ã‘â€š5;O 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬>< (A>Ã‘â€šÃ‘â‚¬Ã‘Æ’4=8: 157 2Ã‘â€¦>40; ?Ã‘â‚¬8 ?5Ã‘â‚¬2>< 2Ã‘â€¦>45 ?> email AÃ‘â€š0=5Ã‘â€š 53> ?Ã‘â‚¬>Ã‘â€ž8;Ã‘Å’).

@@ -17,6 +17,7 @@ function isSameID(a: string | null | undefined, b: string | null | undefined): b
 interface SidebarProps { onChatSelect: () => void; onOpenProfile?: () => void; /** Когда нав-рейл скрыт — показать кнопку «Показать панель» */ navHidden?: boolean; onShowNav?: () => void; }
 
 type ChatListTab = 'all' | 'personal' | 'favorites';
+const ALL_USERS_PAGE_LIMIT = 40;
 
 export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShowNav }: SidebarProps) {
   const { user } = useAuthStore();
@@ -29,6 +30,9 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [allUsers, setAllUsers] = useState<UserPublic[]>([]);
   const [allUsersLoading, setAllUsersLoading] = useState(false);
+  const [allUsersLoadingMore, setAllUsersLoadingMore] = useState(false);
+  const [allUsersTotal, setAllUsersTotal] = useState(0);
+  const [allUsersOffset, setAllUsersOffset] = useState(0);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; chat: ChatWithLastMessage } | null>(null);
   const [renameChat, setRenameChat] = useState<ChatWithLastMessage | null>(null);
   const myId = user?.id || '';
@@ -41,15 +45,39 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     }
   }, [user?.id, fetchChatsIfStale, fetchFavoritesIfStale]);
 
-  useEffect(() => {
-    if (tab === 'all') {
-      setAllUsersLoading(true);
-      api.listUsers()
-        .then(setAllUsers)
-        .catch(() => setAllUsers([]))
-        .finally(() => setAllUsersLoading(false));
+  const allUsersHasMore = allUsers.length < allUsersTotal;
+
+  const loadAllUsersPage = useCallback(async (offset: number, append: boolean) => {
+    if (append) setAllUsersLoadingMore(true);
+    else setAllUsersLoading(true);
+    try {
+      const page = await api.listUsersPage({ limit: ALL_USERS_PAGE_LIMIT, offset });
+      setAllUsersTotal(page.total || 0);
+      setAllUsersOffset(offset + page.limit);
+      setAllUsers((prev) => {
+        if (!append) return page.users;
+        const existing = new Set(prev.map((u) => u.id));
+        const unique = page.users.filter((u) => !existing.has(u.id));
+        return prev.concat(unique);
+      });
+    } catch {
+      if (!append) {
+        setAllUsers([]);
+        setAllUsersTotal(0);
+        setAllUsersOffset(0);
+      }
+    } finally {
+      if (append) setAllUsersLoadingMore(false);
+      else setAllUsersLoading(false);
     }
-  }, [tab]);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'all') return;
+    if (allUsersLoading || allUsersLoadingMore) return;
+    if (allUsers.length > 0) return;
+    void loadAllUsersPage(0, false);
+  }, [tab, allUsers.length, allUsersLoading, allUsersLoadingMore, loadAllUsersPage]);
 
   // При переключении на «ВСЕ» — подгрузить чаты, если кеш пустой/устарел
   useEffect(() => {
@@ -176,6 +204,15 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
     !(m.content_type === 'file' || m.content_type === 'image' || m.content_type === 'voice' || (m.file_name && String(m.file_name).trim() !== ''))
   ), [globalMessages]);
 
+  const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (tab !== 'all' || search.trim()) return;
+    if (allUsersLoading || allUsersLoadingMore || !allUsersHasMore) return;
+    const el = e.currentTarget;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceToBottom > 160) return;
+    void loadAllUsersPage(allUsersOffset, true);
+  }, [tab, search, allUsersLoading, allUsersLoadingMore, allUsersHasMore, loadAllUsersPage, allUsersOffset]);
+
   return (
     <div className="h-full flex flex-col bg-sidebar min-w-0 overflow-x-hidden safe-top safe-bottom">
       {/* Mobile/PWA header (isolated) */}
@@ -225,8 +262,22 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
         </div>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-text pointer-events-none"><IconSearch size={18} /></span>
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            disabled={!search}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+              search
+                ? 'text-sidebar-text hover:text-white hover:bg-sidebar/40'
+                : 'text-sidebar-text/35 cursor-default pointer-events-none'
+            }`}
+            aria-label="Очистить поиск"
+            title="Очистить поиск"
+          >
+            <IconX size={12} />
+          </button>
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск"
-            className="w-full pl-10 pr-3 py-2 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
+            className="w-full pl-10 pr-10 py-2 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
         </div>
       </div>
 
@@ -282,13 +333,30 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
         </div>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-text pointer-events-none"><IconSearch size={18} /></span>
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            disabled={!search}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+              search
+                ? 'text-sidebar-text hover:text-white hover:bg-sidebar/40'
+                : 'text-sidebar-text/35 cursor-default pointer-events-none'
+            }`}
+            aria-label="Очистить поиск"
+            title="Очистить поиск"
+          >
+            <IconX size={12} />
+          </button>
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск"
-            className="w-full pl-10 pr-3 py-2.5 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
+            className="w-full pl-10 pr-10 py-2.5 bg-sidebar-hover rounded-compass text-[14px] text-white placeholder:text-sidebar-text border border-transparent focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-colors" />
         </div>
       </div>
 
       {/* List: ВСЕ | ЛИЧНЫЕ | ИЗБРАННЫЕ. На вкладке «Избранное» — фон с контурными дудлами. */}
-      <div className={`flex-1 overflow-y-auto dark-scroll mt-0.5 md:mt-1 ${tab === 'favorites' ? 'sidebar-favorites-doodle' : ''}`}>
+      <div
+        className={`flex-1 overflow-y-auto dark-scroll mt-0.5 md:mt-1 ${tab === 'favorites' ? 'sidebar-favorites-doodle' : ''}`}
+        onScroll={handleListScroll}
+      >
         {search.trim() ? (
           <>
             {globalLoading && <p className="text-center text-sidebar-text text-[13px] py-8">Поиск...</p>}
@@ -430,6 +498,9 @@ export default function Sidebar({ onChatSelect, onOpenProfile, navHidden, onShow
                     onClick={() => handleChatClick(notesChat.chat.id)}
                     onContextMenu={undefined} />
                 )}
+                {allUsersLoadingMore && (
+                  <p className="text-center text-sidebar-text text-[12px] py-3">Загрузка...</p>
+                )}
               </>
             )}
           </>
@@ -500,6 +571,12 @@ function getChatOnline(c: ChatWithLastMessage, myId: string, o: Record<string, b
   if (c.chat.chat_type === 'group' || c.chat.chat_type === 'notes') return undefined;
   const other = c.members.find((m) => !isSameID(m.id, myId));
   return other ? (o[other.id] ?? other.is_online) : undefined;
+}
+
+function getChatAvatar(c: ChatWithLastMessage, myId: string): string | undefined {
+  if (c.chat.chat_type === 'group' || c.chat.chat_type === 'notes') return c.chat.avatar_url || undefined;
+  const other = c.members.find((m) => !isSameID(m.id, myId));
+  return other?.avatar_url || c.chat.avatar_url || undefined;
 }
 
 function IconBellOff({ size = 12 }: { size?: number }) {
@@ -584,6 +661,7 @@ function ChatItem({ chat, active, myId, typing, onlineUsers, onClick, onContextM
 }) {
   const name = getChatName(chat, myId);
   const online = getChatOnline(chat, myId, onlineUsers);
+  const avatarUrl = getChatAvatar(chat, myId);
   const hasTyping = typing && typing.length > 0;
   const [showTyping, setShowTyping] = useState(hasTyping);
   useEffect(() => {
@@ -610,7 +688,7 @@ function ChatItem({ chat, active, myId, typing, onlineUsers, onClick, onContextM
           <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </div>
       ) : (
-        <Avatar name={name} url={chat.chat.avatar_url || undefined} size={44} online={online} />
+        <Avatar name={name} url={avatarUrl} size={44} online={online} />
       )}
       <div className="flex-1 min-w-0 min-h-0">
         <div className="flex items-center justify-between">
@@ -787,4 +865,3 @@ function RenameGroupModal({ chat, onClose }: { chat: ChatWithLastMessage; onClos
     </div>
   );
 }
-

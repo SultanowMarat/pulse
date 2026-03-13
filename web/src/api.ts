@@ -403,6 +403,23 @@ export const restoreAdminBackup = (file: File) => {
 export const getPublicFileSettings = () =>
   requestPublic<FileSettings>('/config/file-settings');
 export const listUsers = () => request<UserPublic[]>('/users');
+export interface UsersPage {
+  users: UserPublic[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export const listUsersPage = (
+  params: { q?: string; limit?: number; offset?: number },
+  options?: { signal?: AbortSignal }
+) => {
+  const sp = new URLSearchParams();
+  if (params.q) sp.set('q', params.q);
+  if (typeof params.limit === 'number') sp.set('limit', String(params.limit));
+  if (typeof params.offset === 'number') sp.set('offset', String(params.offset));
+  const qs = sp.toString();
+  return request<UsersPage>(`/users/page${qs ? `?${qs}` : ''}`, { signal: options?.signal });
+};
 /** Список всех сотрудников (только для администратора). */
 export const listEmployees = () => request<UserPublic[]>('/users/employees');
 export interface EmployeePublic extends UserPublic {

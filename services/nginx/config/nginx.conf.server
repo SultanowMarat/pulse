@@ -120,6 +120,25 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Desktop auto-update manifest (always fresh).
+    location = /desktop/windows/latest.json {
+        alias /var/www/desktop-updates/latest.json;
+        default_type application/json;
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+    }
+
+    # Desktop MSI packages.
+    location ^~ /downloads/windows/ {
+        alias /var/www/desktop-updates/;
+        default_type application/octet-stream;
+        expires 1h;
+        add_header Cache-Control "public, max-age=3600";
+        add_header X-Content-Type-Options "nosniff";
+        try_files $uri =404;
+    }
+
     location / {
         proxy_pass http://frontend_upstream$request_uri;
         proxy_http_version 1.1;

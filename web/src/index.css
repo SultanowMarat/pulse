@@ -4,6 +4,7 @@
 
 :root {
   --visual-viewport-height: 100dvh;
+  --visual-viewport-width: 100vw;
   --app-height: var(--visual-viewport-height);
   --keyboard-offset: 0px;
   --composer-padding-bottom: max(2px, env(safe-area-inset-bottom));
@@ -136,6 +137,20 @@ html { scroll-behavior: smooth; }
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overflow-x: hidden;
+}
+
+/* Mobile keyboard mode: lock page scroll, keep only internal containers scrollable. */
+@media (hover: none) and (pointer: coarse) {
+  html.keyboard-open,
+  body.keyboard-open {
+    overflow: hidden !important;
+  }
+
+  html.keyboard-open .overflow-y-auto,
+  html.keyboard-open .overflow-auto,
+  html.keyboard-open .chat-messages-scroll {
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Плавный скролл чата: инерция на iOS, меньше дёрганий при прокрутке */

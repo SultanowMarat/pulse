@@ -7,7 +7,8 @@
            Language="1049"
            Scope="perMachine">
     <SummaryInformation Description="$(var.WrapperDescription)" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+                  Schedule="afterInstallInitialize" />
     <MediaTemplate EmbedCab="yes" />
 
     <Icon Id="AppProductIcon" SourceFile="$(var.WrapperAppIcon)" />
@@ -18,6 +19,17 @@
                  Before="InstallWebView2Runtime"
                  Sequence="execute"
                  Condition="NOT Installed" />
+    <SetProperty Id="ClosePulseProcesses"
+                 Value="&quot;[SystemFolder]taskkill.exe&quot; /F /T /IM &quot;$(var.WrapperExeName)&quot;"
+                 Before="ClosePulseProcesses"
+                 Sequence="execute"
+                 Condition="WIX_UPGRADE_DETECTED OR REMOVE=&quot;ALL&quot;" />
+    <CustomAction Id="ClosePulseProcesses"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
     <CustomAction Id="InstallWebView2Runtime"
                   BinaryRef="Wix4UtilCA_X64"
                   DllEntry="WixQuietExec"
@@ -25,6 +37,9 @@
                   Impersonate="no"
                   Return="ignore" />
     <InstallExecuteSequence>
+      <Custom Action="ClosePulseProcesses"
+              After="InstallInitialize"
+              Condition="WIX_UPGRADE_DETECTED OR REMOVE=&quot;ALL&quot;" />
       <Custom Action="InstallWebView2Runtime"
               After="InstallFiles"
               Condition="NOT Installed" />

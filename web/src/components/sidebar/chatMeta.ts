@@ -15,3 +15,9 @@ export function getChatOnline(
   const other = chat.members.find((member) => member.id !== myId);
   return other ? (onlineUsers[other.id] ?? other.is_online) : undefined;
 }
+
+export function getChatAvatar(chat: ChatWithLastMessage, myId: string): string | undefined {
+  if (chat.chat.chat_type === 'group' || chat.chat.chat_type === 'notes') return chat.chat.avatar_url || undefined;
+  const other = chat.members.find((member) => member.id !== myId);
+  return other?.avatar_url || chat.chat.avatar_url || undefined;
+}

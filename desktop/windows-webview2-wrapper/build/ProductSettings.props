@@ -4,8 +4,10 @@
     <WrapperAppId>PulseDesktop</WrapperAppId>
     <WrapperCompanyName>Pulse Team</WrapperCompanyName>
     <WrapperDescription>Desktop wrapper for Pulse PWA</WrapperDescription>
-    <WrapperVersion>1.0.0</WrapperVersion>
-    <WrapperStartUrl>https://example.com</WrapperStartUrl>
+    <WrapperVersion>1.0.17</WrapperVersion>
+    <WrapperStartUrl>https://pulse.chaphana.com</WrapperStartUrl>
+    <WrapperUpdateManifestUrl>https://pulse.chaphana.com/desktop/windows/latest.json</WrapperUpdateManifestUrl>
+    <WrapperAutoUpdateEnabled>true</WrapperAutoUpdateEnabled>
     <WrapperAppIconPath>$(MSBuildThisFileDirectory)..\assets\app.ico</WrapperAppIconPath>
   </PropertyGroup>
 </Project>

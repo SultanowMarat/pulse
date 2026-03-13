@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
@@ -32,7 +33,7 @@
     <WriteLinesToFile
       File="$(IntermediateOutputPath)WrapperSettings.g.cs"
       Overwrite="true"
-      Lines="namespace Pulse.Desktop%3B&#xD;&#xA;internal static class WrapperSettings&#xD;&#xA;{&#xD;&#xA;    public const string AppName = &quot;$(WrapperAppName)&quot;%3B&#xD;&#xA;    public const string AppVersion = &quot;$(WrapperVersion)&quot;%3B&#xD;&#xA;    public const string AppDescription = &quot;$(WrapperDescription)&quot;%3B&#xD;&#xA;    public const string StartUrl = &quot;$(WrapperStartUrl)&quot;%3B&#xD;&#xA;    public const string CompanyName = &quot;$(WrapperCompanyName)&quot;%3B&#xD;&#xA;}" />
+      Lines="namespace Pulse.Desktop%3B&#xD;&#xA;internal static class WrapperSettings&#xD;&#xA;{&#xD;&#xA;    public const string AppName = &quot;$(WrapperAppName)&quot;%3B&#xD;&#xA;    public const string AppVersion = &quot;$(WrapperVersion)&quot;%3B&#xD;&#xA;    public const string AppDescription = &quot;$(WrapperDescription)&quot;%3B&#xD;&#xA;    public const string StartUrl = &quot;$(WrapperStartUrl)&quot;%3B&#xD;&#xA;    public const string CompanyName = &quot;$(WrapperCompanyName)&quot;%3B&#xD;&#xA;    public const string UpdateManifestUrl = &quot;$(WrapperUpdateManifestUrl)&quot;%3B&#xD;&#xA;    public const string AutoUpdateEnabled = &quot;$(WrapperAutoUpdateEnabled)&quot;%3B&#xD;&#xA;}" />
   </Target>
 
   <Target Name="PrepareAppIcon" BeforeTargets="BeforeBuild" Condition="Exists('$(WrapperAppIconPath)')">

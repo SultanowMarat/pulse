@@ -127,6 +127,27 @@ function mentionTokenFromUsername(username: string): string {
   return username.trim().replace(/\s+/g, '_');
 }
 
+function fileExtFromMime(mime: string): string {
+  const m = (mime || '').toLowerCase();
+  if (m === 'image/jpeg') return 'jpg';
+  if (m === 'image/png') return 'png';
+  if (m === 'image/webp') return 'webp';
+  if (m === 'image/gif') return 'gif';
+  if (m === 'image/heic') return 'heic';
+  if (m === 'image/heif') return 'heif';
+  if (m === 'image/bmp') return 'bmp';
+  if (m === 'image/svg+xml') return 'svg';
+  const tail = m.split('/')[1] || 'png';
+  return tail.split(';')[0] || 'png';
+}
+
+function mapOutboundContentType(uploadContentType: string | undefined, fileMimeType: string | undefined): 'image' | 'file' {
+  const a = (uploadContentType || '').toLowerCase();
+  const b = (fileMimeType || '').toLowerCase();
+  if (a.startsWith('image/') || b.startsWith('image/')) return 'image';
+  return 'file';
+}
+
 function getMentionQueryContext(value: string, caret: number): { start: number; query: string } | null {
   const left = value.slice(0, caret);
   const at = left.lastIndexOf('@');
@@ -196,6 +217,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const inputEmojiPickerRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const typingT = useRef<ReturnType<typeof setTimeout>>();
@@ -307,6 +329,28 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
 
   useEffect(() => cancelScheduledScroll, [cancelScheduledScroll]);
 
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const keepComposerVisible = () => {
+      const active = document.activeElement;
+      if (active !== textRef.current) return;
+      if (!activeChatId) return;
+      scheduleScrollToBottom('auto');
+    };
+
+    vv.addEventListener('resize', keepComposerVisible, { passive: true });
+    vv.addEventListener('scroll', keepComposerVisible, { passive: true });
+    window.addEventListener('orientationchange', keepComposerVisible, { passive: true });
+
+    return () => {
+      vv.removeEventListener('resize', keepComposerVisible);
+      vv.removeEventListener('scroll', keepComposerVisible);
+      window.removeEventListener('orientationchange', keepComposerVisible);
+    };
+  }, [activeChatId, scheduleScrollToBottom]);
+
 
   // Сброс локального состояния при смене чата, чтобы не было вспышки старого контента (ответ/перес send/поле ввода)
   useEffect(() => {
@@ -329,7 +373,19 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const scrollToMessage = useCallback((msgId: string) => {
     const el = document.getElementById(`msg-${msgId}`);
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const scroller = messagesScrollRef.current;
+    if (scroller && scroller.contains(el)) {
+      const scrollerRect = scroller.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const targetTop =
+        scroller.scrollTop +
+        (elRect.top - scrollerRect.top) -
+        (scroller.clientHeight / 2) +
+        (elRect.height / 2);
+      scroller.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    } else {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
     setHighlightMsgId(msgId);
     setTimeout(() => setHighlightMsgId(null), 2000);
   }, []);
@@ -509,22 +565,173 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
     typingT.current = setTimeout(() => {}, 3000);
   }, [activeChatId, sendTyping]);
 
-  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const insertTextIntoComposer = useCallback((chunk: string) => {
+    if (!activeChatId) return;
+    const textToInsert = chunk.replace(/\r\n/g, '\n');
+    if (!textToInsert) return;
+
+    const ta = textRef.current;
+    if (!ta) {
+      setText((prev) => prev + textToInsert);
+      return;
+    }
+
+    ta.focus();
+    const base = ta.value ?? text;
+    const start = ta.selectionStart ?? base.length;
+    const end = ta.selectionEnd ?? base.length;
+    const next = base.slice(0, start) + textToInsert + base.slice(end);
+    const nextPos = start + textToInsert.length;
+
+    setText(next);
+    updateMentionState(next, nextPos);
+    handleTyping();
+    if (stickToBottomRef.current) scheduleScrollToBottom('auto');
+
+    requestAnimationFrame(() => {
+      const input = textRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextPos, nextPos);
+    });
+  }, [activeChatId, handleTyping, scheduleScrollToBottom, text, updateMentionState]);
+
+  const cancelUpload = useCallback(() => {
+    const activeUpload = uploadAbortRef.current;
+    if (activeUpload) {
+      try {
+        activeUpload.abort();
+      } catch {
+        // ignore
+      }
+      uploadAbortRef.current = null;
+    }
+    setUploading(false);
+    setUploadKind(null);
+    setUploadProgress(0);
+  }, []);
+
+  const uploadAndSendFile = useCallback(async (file: File) => {
     if (!file || !activeChatId) return;
+    const uploadAbort = new AbortController();
+    uploadAbortRef.current = uploadAbort;
     setUploadKind('file');
     setUploadProgress(0);
     setUploading(true);
     try {
-      const r = await uploadFile(file, { onProgress: (percent) => setUploadProgress(percent) });
+      const r = await uploadFile(file, { signal: uploadAbort.signal, onProgress: (percent) => setUploadProgress(percent) });
       const displayName = normalizeFileDisplayName(r.file_name) || file.name.replace(/\+/g, ' ').trim() || file.name;
-      sendMessage(activeChatId, file.name, { contentType: r.content_type, fileUrl: r.url, fileName: displayName, fileSize: r.file_size });
-    } catch { /* */ }
-    setUploading(false);
-    setUploadKind(null);
-    setUploadProgress(0);
-    if (fileRef.current) fileRef.current.value = '';
+      const contentType = mapOutboundContentType(r.content_type, file.type);
+      sendMessage(activeChatId, file.name, { contentType, fileUrl: r.url, fileName: displayName, fileSize: r.file_size });
+    } catch {
+      // noop
+    } finally {
+      if (uploadAbortRef.current === uploadAbort) {
+        uploadAbortRef.current = null;
+      }
+      setUploading(false);
+      setUploadKind(null);
+      setUploadProgress(0);
+    }
   }, [activeChatId, uploadFile, sendMessage]);
+
+  const sendDroppedFiles = useCallback(async (files: FileList | File[] | null | undefined) => {
+    if (!activeChatId || !files) return;
+    const list = Array.from(files).filter((f) => !!f);
+    if (list.length === 0) return;
+    for (const file of list) {
+      await uploadAndSendFile(file);
+    }
+  }, [activeChatId, uploadAndSendFile]);
+
+  const handleChatDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!activeChatId) return;
+    const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+    if (!types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, [activeChatId]);
+
+  const handleChatDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!activeChatId) return;
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void sendDroppedFiles(files);
+  }, [activeChatId, sendDroppedFiles]);
+
+  useEffect(() => {
+    const onGlobalPasteHotkey = async (ev: KeyboardEvent) => {
+      if (!activeChatId) return;
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey) return;
+      if (ev.key.toLowerCase() !== 'v') return;
+
+      const target = ev.target as HTMLElement | null;
+      const isEditableTarget = !!target && (
+        target.isContentEditable ||
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT'
+      );
+      // Keep native paste behavior inside focused editable controls.
+      if (isEditableTarget) return;
+
+      ev.preventDefault();
+
+      // First try image paste from clipboard.
+      try {
+        if (navigator.clipboard && 'read' in navigator.clipboard) {
+          const items = await (navigator.clipboard as Clipboard & { read: () => Promise<ClipboardItem[]> }).read();
+          for (const item of items) {
+            const imageType = item.types.find((t) => t.startsWith('image/'));
+            if (!imageType) continue;
+            const blob = await item.getType(imageType);
+            const ext = fileExtFromMime(blob.type);
+            const file = new File([blob], `pasted-image-${Date.now()}.${ext}`, { type: blob.type || imageType });
+            await uploadAndSendFile(file);
+            return;
+          }
+        }
+      } catch {
+        // Ignore and fallback to text.
+      }
+
+      let clip = '';
+      try {
+        clip = await navigator.clipboard.readText();
+      } catch {
+        clip = '';
+      }
+      if (!clip) return;
+      insertTextIntoComposer(clip);
+    };
+
+    window.addEventListener('keydown', onGlobalPasteHotkey);
+    return () => window.removeEventListener('keydown', onGlobalPasteHotkey);
+  }, [activeChatId, insertTextIntoComposer, uploadAndSendFile]);
+
+  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChatId) return;
+    await sendDroppedFiles([file]);
+    if (fileRef.current) fileRef.current.value = '';
+  }, [activeChatId, sendDroppedFiles]);
+
+  const handleComposerPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!activeChatId) return;
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find((it) => it.kind === 'file' && it.type.startsWith('image/'));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    const ext = fileExtFromMime(file.type);
+    const namedFile = file.name
+      ? file
+      : new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type || 'image/png' });
+    void uploadAndSendFile(namedFile);
+  }, [activeChatId, uploadAndSendFile]);
 
   const startRecording = useCallback(async () => {
     if (!activeChatId || !navigator.mediaDevices?.getUserMedia) return;
@@ -556,16 +763,21 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
           const file = new File([blob], `voice-${Date.now()}${ext}`, { type: mime.split(';')[0] });
           const { optId, clientMsgId } = addOptimisticVoiceMessage(chatId);
           try {
-            const r = await uploadVoice(file, { onProgress: (percent) => setUploadProgress(percent) });
+            const uploadAbort = new AbortController();
+            uploadAbortRef.current = uploadAbort;
+            const r = await uploadVoice(file, { signal: uploadAbort.signal, onProgress: (percent) => setUploadProgress(percent) });
             updateOptimisticVoiceMessage(chatId, optId, { fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size });
             sendMessageWsOnly(chatId, 'Голосовое сообщение', { contentType: 'voice', fileUrl: r.url, fileName: r.file_name || 'voice', fileSize: r.file_size, clientMsgId });
           } catch (e: unknown) {
             removeOptimisticMessage(chatId, optId);
-            const msg = e instanceof Error ? e.message : 'Не удалось отправить голосовое';
-            setVoiceError(msg);
-            console.error('uploadVoice failed:', e);
+            if (!(e instanceof DOMException && e.name === 'AbortError')) {
+              const msg = e instanceof Error ? e.message : 'Voice upload failed';
+              setVoiceError(msg);
+              console.error('uploadVoice failed:', e);
+            }
           }
         } finally {
+          uploadAbortRef.current = null;
           setUploading(false);
           setUploadKind(null);
           setUploadProgress(0);
@@ -685,6 +897,19 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (uploadAbortRef.current) {
+        try {
+          uploadAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+        uploadAbortRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!recording) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
@@ -754,7 +979,12 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
   const chatOnline = getOnline(chat, user?.id || '', onlineUsers);
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none" onClick={() => setCtxMenu(null)}>
+    <div
+      className="h-full min-h-0 flex flex-col bg-white dark:bg-dark-bg safe-x min-w-0 overflow-hidden overscroll-none"
+      onClick={() => setCtxMenu(null)}
+      onDragOver={handleChatDragOver}
+      onDrop={handleChatDrop}
+    >
       {/* ── Header ── */}
       <div className="shrink-0 sticky top-0 z-20 flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:pt-[max(0.625rem,env(safe-area-inset-top))] border-b border-surface-border dark:border-dark-border bg-white dark:bg-dark-bg min-w-0 overflow-hidden">
         {onOpenProfile && (
@@ -777,7 +1007,7 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
             onOpenInfo?.();
           }
         }}>
-          <Avatar name={chatName} url={chat.chat.avatar_url || undefined} size={34} online={chatOnline} className="sm:!w-10 sm:!h-10" />
+          <Avatar name={chatName} url={getAvatar(chat, user?.id || '')} size={34} online={chatOnline} className="sm:!w-10 sm:!h-10" />
         </div>
         <div className="flex-1 min-w-0" onClick={(e) => {
           if (chat.chat.chat_type === 'personal') {
@@ -995,14 +1225,23 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
       {/* Upload overlay */}
       {uploading && !recording && (
         <div className="shrink-0 px-4 py-2 bg-surface dark:bg-dark-elevated border-t border-surface-border dark:border-dark-border">
-          <div className="flex items-center gap-2">
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-            <span className="text-[13px] text-txt-secondary dark:text-[#8b98a5]">
-              {uploadKind === 'file' ? 'Отправка файла...' : 'Отправка голосового...'}
-            </span>
-            {uploadKind === 'file' && (
-              <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] tabular-nums">{Math.max(0, Math.min(100, Math.round(uploadProgress)))}%</span>
-            )}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-[13px] text-txt-secondary dark:text-[#8b98a5] truncate">
+                {uploadKind === 'file' ? 'Отправка файла...' : 'Отправка голосового...'}
+              </span>
+              {uploadKind === 'file' && (
+                <span className="text-[12px] text-txt-secondary dark:text-[#8b98a5] tabular-nums shrink-0">{Math.max(0, Math.min(100, Math.round(uploadProgress)))}%</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={cancelUpload}
+              className="h-7 px-2.5 rounded-compass text-[12px] font-medium text-danger hover:bg-danger/10 transition-colors shrink-0"
+            >
+              Отмена
+            </button>
           </div>
           <div className="mt-1.5 h-1.5 rounded-full bg-surface-border dark:bg-dark-border overflow-hidden">
             {uploadKind === 'file' ? (
@@ -1059,6 +1298,8 @@ export default function Chat({ onBack, onOpenInfo, onOpenSearch, onOpenProfile }
                     const t = e.currentTarget;
                     updateMentionState(t.value, t.selectionStart ?? t.value.length);
                   }}
+                  onFocus={() => scheduleScrollToBottom('auto')}
+                  onPaste={handleComposerPaste}
                   onKeyDown={handleKeyDown} placeholder="Написать сообщение..." rows={1}
                   className="flex-1 min-w-0 resize-none px-3 py-1.5 sm:py-2 bg-surface dark:bg-dark-elevated rounded-compass text-[13px] sm:text-[14px] text-txt dark:text-[#e7e9ea] placeholder:text-txt-placeholder dark:placeholder:text-[#8b98a5] border border-transparent focus:border-primary/30 focus:ring-1 focus:ring-primary/15 outline-none transition-all max-h-28 sm:max-h-32 overflow-y-auto overflow-x-hidden break-words"
                   style={{ minHeight: 34, maxWidth: '100%' }} />
@@ -1315,7 +1556,32 @@ function MsgBubble({ msg, isOwn, showAvatar, isGroup, onCtx, onReply, onReact, m
   onReact: (emoji: string) => void; myId: string; onScrollTo?: (msgId: string) => void;
   onUserClick?: (userId: string) => void;
 }) {
-  const [showEmoji, setShowEmoji] = useState(false);
+  const handleDownload = useCallback(() => {
+    const displayName = normalizeFileDisplayName(msg.file_name) || 'message';
+    if (msg.file_url) {
+      const a = document.createElement('a');
+      a.href = `${msg.file_url}${msg.file_url.includes('?') ? '&' : '?'}name=${encodeURIComponent(displayName)}`;
+      a.download = displayName;
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    if (msg.content_type === 'text' && msg.content) {
+      const content = msg.content.replace(/\r?\n/g, '\r\n');
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const base = content.trim().slice(0, 24).replace(/[\\/:*?"<>|]+/g, '_') || 'message';
+      a.href = url;
+      a.download = `${base}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  }, [msg.content, msg.content_type, msg.file_name, msg.file_url]);
 
   const groups = useMemo(() => {
     if (msg.is_deleted) return [];
@@ -1436,18 +1702,11 @@ function MsgBubble({ msg, isOwn, showAvatar, isGroup, onCtx, onReply, onReact, m
         {/* Hover actions */}
         <div className={`absolute top-0 ${isOwn ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 px-1`}>
           <HoverBtn tip="Ответить" onClick={(e) => { e.stopPropagation(); onReply(); }}><IconReply /></HoverBtn>
-          <HoverBtn tip="Реакция" onClick={(e) => { e.stopPropagation(); setShowEmoji(!showEmoji); }}>
-            <span className="text-[12px]">😀</span>
+          <HoverBtn tip="Скачать" onClick={(e) => { e.stopPropagation(); handleDownload(); }}>
+            <IconDownload size={14} />
           </HoverBtn>
         </div>
 
-        {showEmoji && (
-          <EmojiPicker
-            isOwn={isOwn}
-            onPick={(e) => { onReact(e); setShowEmoji(false); }}
-            onClose={() => setShowEmoji(false)}
-          />
-        )}
       </div>
     </div>
   );
@@ -1519,7 +1778,7 @@ function ForwardModal({ message, chats, myId, onForward, onClose }: {
           return (
             <button key={c.chat.id} onClick={() => onForward(c.chat.id)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-compass hover:bg-surface dark:hover:bg-dark-hover transition-colors">
-              <Avatar name={name} url={c.chat.avatar_url || undefined} size={36} />
+              <Avatar name={name} url={getAvatar(c, user?.id || '')} size={36} />
               <div className="flex-1 min-w-0">
                 <span className="text-[14px] font-medium text-txt dark:text-[#e7e9ea]">{name}</span>
                 <p className="text-[11px] text-txt-secondary dark:text-[#8b98a5]">{c.chat.chat_type === 'group' ? `${c.members.length} участников` : c.chat.chat_type === 'notes' ? 'Персональный чат' : 'Личный чат'}</p>
@@ -1541,9 +1800,16 @@ function getName(c: ChatWithLastMessage, myId: string) {
 }
 function getOnline(c: ChatWithLastMessage, myId: string, o: Record<string, boolean>) {
   if (c.chat.chat_type === 'group' || c.chat.chat_type === 'notes') return undefined;
-  const other = c.members.find((m) => m.id !== myId);
+  const other = c.members.find((m) => !isSameID(m.id, myId));
   return other ? (o[other.id] ?? other.is_online) : undefined;
 }
+
+function getAvatar(c: ChatWithLastMessage, myId: string): string | undefined {
+  if (c.chat.chat_type === 'group' || c.chat.chat_type === 'notes') return c.chat.avatar_url || undefined;
+  const other = c.members.find((m) => !isSameID(m.id, myId));
+  return other?.avatar_url || c.chat.avatar_url || undefined;
+}
+
 
 
 

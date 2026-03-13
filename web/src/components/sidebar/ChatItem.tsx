@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Avatar, TypingDots, formatTime } from '../ui';
 import type { ChatWithLastMessage } from '../../types';
 import IconBellOff from './IconBellOff';
-import { getChatName, getChatOnline } from './chatMeta';
+import { getChatAvatar, getChatName, getChatOnline } from './chatMeta';
 import { isMessageFromUserId } from '../../messageOwnership';
 
 interface ChatItemProps {
@@ -26,6 +26,7 @@ export default function ChatItem({
 }: ChatItemProps) {
   const name = getChatName(chat, myId);
   const online = getChatOnline(chat, myId, onlineUsers);
+  const avatarUrl = getChatAvatar(chat, myId);
   const hasTyping = Boolean(typing && typing.length > 0);
   const [showTyping, setShowTyping] = useState(hasTyping);
 
@@ -64,7 +65,7 @@ export default function ChatItem({
           </svg>
         </div>
       ) : (
-        <Avatar name={name} url={chat.chat.avatar_url || undefined} size={44} online={online} />
+        <Avatar name={name} url={avatarUrl} size={44} online={online} />
       )}
 
       <div className="flex-1 min-w-0 min-h-0">

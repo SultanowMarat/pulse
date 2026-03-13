@@ -37,7 +37,18 @@ server {
     }
 
     # Хэшированные ассеты можно кэшировать агрессивно.
-    location ^~ /assets/ {
+    location ~* ^/assets/index-.*\.js$ {
+        try_files $uri /assets/index.js =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    location ~* ^/assets/index-.*\.css$ {
+        try_files $uri /assets/index.css =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }

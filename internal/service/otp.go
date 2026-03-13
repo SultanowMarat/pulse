@@ -124,7 +124,7 @@ func normalizeEmailForKey(s string) string {
 func (s *OTPAuthService) RequestCode(ctx context.Context, req RequestCodeRequest) (*VerifyCodeResponse, error) {
 	identifier := strings.TrimSpace(req.Email)
 	if identifier == "" {
-		return nil, fmt.Errorf("email >1O70Ñ‚5;5=")
+		return nil, fmt.Errorf("email обязателен")
 	}
 	if emailRegexp.MatchString(strings.ToLower(identifier)) {
 		return s.requestCodeByEmail(ctx, req, identifier)
@@ -261,7 +261,7 @@ func (s *OTPAuthService) VerifyCode(ctx context.Context, req VerifyCodeRequest) 
 	keyEmail := normalizeEmailForKey(emailNorm)
 	codeNorm := onlyDigits(strings.TrimSpace(req.Code))
 	if emailNorm == "" || codeNorm == "" || req.DeviceID == "" {
-		return nil, fmt.Errorf("email, code 8 device_id >1O70Ñ‚5;ÑŒ=Ñ‹")
+		return nil, fmt.Errorf("email, code и device_id обязательны")
 	}
 	if len(codeNorm) != 6 {
 		return nil, ErrInvalidOTP
@@ -320,7 +320,7 @@ func (s *OTPAuthService) buildUserByEmail(ctx context.Context, emailAddr string)
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("=5 Ñƒ40;>AÑŒ A35=5Ñ€8Ñ€>20Ñ‚ÑŒ username")
+	return nil, fmt.Errorf("не удалось сгенерировать username")
 }
 
 func (s *OTPAuthService) issueSession(ctx context.Context, user *model.User, deviceID, deviceName string, isNewUser bool) (*VerifyCodeResponse, error) {
