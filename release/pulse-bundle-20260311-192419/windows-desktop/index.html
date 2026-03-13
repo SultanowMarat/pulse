@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="pulse" />
+    <!-- Windows / macOS (MS Tile) -->
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="pulse-app-version" content="20260311-7" />
+    <title>pulse</title>
+    <link rel="manifest" href="./manifest.webmanifest?v=20260311-7" />
+    <link rel="shortcut icon" type="image/png" href="./icons/icon-192.png?v=20260311-7" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=20260311-7" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=20260311-7" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260311-7" />
+    <link rel="apple-touch-icon-precomposed" href="./apple-touch-icon-precomposed.png?v=20260311-7" />
+    <link rel="apple-touch-icon" sizes="120x120" href="./icons/icon-120.png?v=20260311-7" />
+    <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152.png?v=20260311-7" />
+    <link rel="apple-touch-icon" sizes="167x167" href="./icons/icon-167.png?v=20260311-7" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png?v=20260311-7" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="./assets/index-DVzsWAAR.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BHqR1eIo.css">
+  </head>
+  <body>
+    <div id="root">
+      <div class="loading-placeholder">Загрузка...</div>
+    </div>
+    <script>
+      (function() {
+        var theme = localStorage.getItem('compass-theme');
+        var dark = theme === 'dark' || (theme !== 'light' && theme !== 'dark' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark');
+      })();
+    </script>
+  </body>
+</html>
+
+

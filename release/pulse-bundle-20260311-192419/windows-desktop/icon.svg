@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Transparent logo: no solid background shape -->
+  <path fill="#ffffff" d="M128 160h256v120l-64 80-64-40-64 40-64-80V160zm0 200v72h256v-72l-64 40-64-40-64 40-64-40z"/>
+</svg>

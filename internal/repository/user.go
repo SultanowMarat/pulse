@@ -16,10 +16,10 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // userCols â€” A?8A>: :>;>=>: 4;O SELECT, 2:;ÑŽÑ‡0O phone/position 8 disabled_at.
-const userCols = `id, username, email, COALESCE(phone,''), COALESCE(position,''), password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at`
+const userCols = `id, username, COALESCE(email,''), COALESCE(phone,''), COALESCE(position,''), password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at`
 
 // userColsAliased â€” Ñ‚5 65 :>;>=:8 A ?Ñ€5Ñ„8:A>< u. 4;O 70?Ñ€>A>2 A JOIN (ListPage). COALESCE 4>;65= ?>;ÑƒÑ‡0Ñ‚ÑŒ u.column.
-const userColsAliased = `u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.position,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at, u.disabled_at`
+const userColsAliased = `u.id, u.username, COALESCE(u.email,''), COALESCE(u.phone,''), COALESCE(u.position,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at, u.disabled_at`
 
 type UserRepository struct {
 	pool *pgxpool.Pool
@@ -43,7 +43,7 @@ func (r *UserRepository) Create(ctx context.Context, u *model.User) error {
 	defer logger.DeferLogDuration("user.Create", time.Now())()
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO users (id, username, email, phone, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		 VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9, $10, $11)`,
 		u.ID, u.Username, u.Email, u.Phone, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
 	)
 	if err != nil {
@@ -58,7 +58,7 @@ func (r *UserRepository) CreateIfNoUsers(ctx context.Context, u *model.User) (bo
 	defer logger.DeferLogDuration("user.CreateIfNoUsers", time.Now())()
 	tag, err := r.pool.Exec(ctx,
 		`INSERT INTO users (id, username, email, phone, position, password_hash, avatar_url, last_seen_at, is_online, created_at, disabled_at)
-		 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+		 SELECT $1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9, $10, $11
 		 WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1)`,
 		u.ID, u.Username, u.Email, u.Phone, u.Position, u.PasswordHash, u.AvatarURL, u.LastSeenAt, u.IsOnline, u.CreatedAt, u.DisabledAt,
 	)
@@ -290,7 +290,7 @@ func (r *UserRepository) SetOnline(ctx context.Context, userID string, online bo
 func (r *UserRepository) UpdateProfile(ctx context.Context, userID, username, avatarURL, email, phone, position string) error {
 	defer logger.DeferLogDuration("user.UpdateProfile", time.Now())()
 	_, err := r.pool.Exec(ctx,
-		`UPDATE users SET username = $1, avatar_url = $2, email = $3, phone = $4, position = $5 WHERE id = $6`,
+		`UPDATE users SET username = $1, avatar_url = $2, email = NULLIF($3, ''), phone = $4, position = $5 WHERE id = $6`,
 		username, avatarURL, email, phone, position, userID,
 	)
 	if err != nil {

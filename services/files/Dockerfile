@@ -1,7 +1,7 @@
 # Files: Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð·Ð°Ð³Ñ€ÑƒÐ·ÐºÐ°/Ñ€Ð°Ð·Ð´Ð°Ñ‡Ð° Ñ„Ð°Ð¹Ð»Ð¾Ð², Ð±ÐµÐ· Ð¸ÑÑ…Ð¾Ð´ÑÑ‰ÐµÐ³Ð¾ HTTPS â€” Ð±ÐµÐ· ca-certificates
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-ENV GOPROXY=direct GOSUMDB=off
+ENV GOPROXY=https://proxy.golang.org,direct GOSUMDB=off
 RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,id=go-mod \

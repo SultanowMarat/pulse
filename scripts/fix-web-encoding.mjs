@@ -7,7 +7,7 @@ const targets = execSync('git ls-files web/src web/public/sw.js', { encoding: 'u
   .filter(Boolean)
   .filter((f) => fs.existsSync(f));
 
-const mojibakeRe = /(?:[ÐÑÃÂ][\u0080-\u00FF])+/g;
+const mojibakeRe = /(?:[����][\u0080-\u00FF])+/g;
 
 const safeAscii = new Set([
   0x09, 0x0a, 0x0d, 0x20,
@@ -46,7 +46,7 @@ for (const file of targets) {
 
   out = out.replace(/(["'`])((?:\\.|(?!\1)[\s\S])*)\1/g, (m, q, body) => {
     let b = body;
-    if (/[ÐÑÃÂ]/.test(b)) b = decodeMojibakeOnce(b);
+    if (/[����]/.test(b)) b = decodeMojibakeOnce(b);
     if (shouldLowByteRestore(b)) {
       const restored = lowByteRestore(b);
       if (/[\u0400-\u04FF]/.test(restored)) b = restored;

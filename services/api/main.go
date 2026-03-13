@@ -109,6 +109,7 @@ func main() {
 		}()
 	}
 	chatCache := cache.NewChatCache(redisCache)
+	userCache := cache.NewUserCache(redisCache)
 
 	userRepo := repository.NewUserRepository(pool)
 	permRepo := repository.NewPermissionRepository(pool)
@@ -173,7 +174,7 @@ func main() {
 	chatH := handler.NewChatHandler(chatRepo, userRepo, permRepo, msgRepo, hub, fileH, chatCache)
 	msgH := handler.NewMessageHandler(msgRepo, chatRepo, reactRepo, pinnedRepo, chatCache)
 	audioH := handler.NewAudioHandler(cfg)
-	userH := handler.NewUserHandler(userRepo, msgRepo, permRepo, cfg.AuthServiceURL, nil, hub)
+	userH := handler.NewUserHandler(userRepo, msgRepo, permRepo, userCache, cfg.AuthServiceURL, nil, hub)
 	adminH := handler.NewAdminHandler(permRepo, mailSettingsRepo, fileSettingsRepo, int(cfg.MaxUploadSize/(1024*1024)))
 	backupH := handler.NewBackupHandler(permRepo, cfg.DatabaseURL(), cfg.UploadDir, os.Getenv("BACKUP_AUDIO_DIR"), os.Getenv("VAPID_KEYS_FILE"))
 	wsH := handler.NewWSHandler(hub)

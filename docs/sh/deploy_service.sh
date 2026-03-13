@@ -43,7 +43,7 @@ if [[ -n "${IMAGE_TAR}" ]]; then
 fi
 
 echo "Restarting service: ${SERVICE}"
-docker compose -f "${COMPOSE_FILE}" up -d --no-build "${SERVICE}"
+docker compose -f "${COMPOSE_FILE}" up -d --no-build --pull never "${SERVICE}"
 
 echo "Service status:"
 docker compose -f "${COMPOSE_FILE}" ps "${SERVICE}"

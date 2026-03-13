@@ -17,3 +17,8 @@ ssh/
 !TESTING_POLICY.md
 tools/
 dist/
+dock/
+release/**/*.tar
+release/**/*.tar.gz
+desktop/windows-webview2-wrapper/**/bin/
+desktop/windows-webview2-wrapper/**/obj/

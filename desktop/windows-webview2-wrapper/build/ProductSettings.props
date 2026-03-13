@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <WrapperAppName>Pulse</WrapperAppName>
+    <WrapperAppId>PulseDesktop</WrapperAppId>
+    <WrapperCompanyName>Pulse Team</WrapperCompanyName>
+    <WrapperDescription>Desktop wrapper for Pulse PWA</WrapperDescription>
+    <WrapperVersion>1.0.0</WrapperVersion>
+    <WrapperStartUrl>https://example.com</WrapperStartUrl>
+    <WrapperAppIconPath>$(MSBuildThisFileDirectory)..\assets\app.ico</WrapperAppIconPath>
+  </PropertyGroup>
+</Project>

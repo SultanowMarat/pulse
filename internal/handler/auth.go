@@ -33,9 +33,10 @@ func (h *AuthHandler) RequestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Email == "" {
-		writeError(w, http.StatusBadRequest, "email >1O70Ñ‚5;5=")
+		writeError(w, http.StatusBadRequest, "email required")
 		return
 	}
+
 	resp, err := h.otpSvc.RequestCode(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidLoginKey) {
@@ -43,23 +44,23 @@ func (h *AuthHandler) RequestCode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, service.ErrRateLimitExceeded) {
-			writeError(w, http.StatusTooManyRequests, "!;8Ñˆ:>< <=>3> 70?Ñ€>A>2. ÐŸ>?Ñ€>1Ñƒ9Ñ‚5 ?>765.")
+			writeError(w, http.StatusTooManyRequests, "too many requests, please retry later")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidEmail) {
-			writeError(w, http.StatusBadRequest, "525Ñ€=Ñ‹9 Ñ„>Ñ€<0Ñ‚ email")
+			writeError(w, http.StatusBadRequest, "invalid email format")
 			return
 		}
 		if errors.Is(err, service.ErrUserDisabled) {
-			writeError(w, http.StatusForbidden, "Ð”>AÑ‚Ñƒ? 70?Ñ€5Ñ‰Ñ‘=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
+			writeError(w, http.StatusForbidden, "user access is disabled")
 			return
 		}
 		if errors.Is(err, service.ErrUserNotInvited) {
-			writeError(w, http.StatusForbidden, "ÐŸ>;ÑŒ7>20Ñ‚5;ÑŒ =5 =0945=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
+			writeError(w, http.StatusForbidden, "user is not invited")
 			return
 		}
 		logger.Errorf("request-code send failed for %s: %v", req.Email, err)
-		writeError(w, http.StatusInternalServerError, "5 Ñƒ40;>AÑŒ >Ñ‚?Ñ€028Ñ‚ÑŒ :>4")
+		writeError(w, http.StatusInternalServerError, "failed to send code")
 		return
 	}
 	if resp != nil {
@@ -82,19 +83,19 @@ func (h *AuthHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.otpSvc.VerifyCode(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidOTP) {
-			writeError(w, http.StatusUnauthorized, "525Ñ€=Ñ‹9 8;8 8AÑ‚Ñ‘:Ñˆ89 :>4")
+			writeError(w, http.StatusUnauthorized, "invalid or expired code")
 			return
 		}
 		if errors.Is(err, service.ErrUserDisabled) {
-			writeError(w, http.StatusForbidden, "Ð”>AÑ‚Ñƒ? 70?Ñ€5Ñ‰Ñ‘=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
+			writeError(w, http.StatusForbidden, "user access is disabled")
 			return
 		}
 		if errors.Is(err, service.ErrUserNotInvited) {
-			writeError(w, http.StatusForbidden, "ÐŸ>;ÑŒ7>20Ñ‚5;ÑŒ =5 =0945=. Ðž1Ñ€0Ñ‚8Ñ‚5AÑŒ : 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€Ñƒ.")
+			writeError(w, http.StatusForbidden, "user is not invited")
 			return
 		}
 		logger.Errorf("verify-code error email=%s device_id=%s: %v", req.Email, req.DeviceID, err)
-		msg := "ÐžÑˆ81:0 25Ñ€8Ñ„8:0Ñ†88"
+		msg := "verification failed"
 		if os.Getenv("APP_ENV") != "production" && os.Getenv("DEBUG") != "" {
 			msg = msg + ": " + strings.ReplaceAll(err.Error(), "\n", " ")
 		}
@@ -116,7 +117,7 @@ func (h *AuthHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.otpSvc.ListSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 703Ñ€Ñƒ7:8 A5AA89")
+		writeError(w, http.StatusInternalServerError, "failed to list sessions")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": list})
@@ -135,11 +136,11 @@ func (h *AuthHandler) LogoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, err := h.otpSvc.LogoutSession(r.Context(), userID, sessionID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
+		writeError(w, http.StatusInternalServerError, "failed to logout session")
 		return
 	}
 	if !ok {
-		writeError(w, http.StatusNotFound, "!5AA8O =5 =0945=0")
+		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -157,7 +158,7 @@ func (h *AuthHandler) LogoutAllSessions(w http.ResponseWriter, r *http.Request) 
 	}
 	_, err := h.otpSvc.LogoutAllSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
+		writeError(w, http.StatusInternalServerError, "failed to logout sessions")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -177,7 +178,7 @@ func (h *AuthHandler) InternalLogoutUserSessions(w http.ResponseWriter, r *http.
 	}
 	n, err := h.otpSvc.LogoutAllSessions(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "ÐžÑˆ81:0 2Ñ‹Ñ…>40")
+		writeError(w, http.StatusInternalServerError, "failed to logout sessions")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "revoked": n})

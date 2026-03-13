@@ -1,7 +1,7 @@
 # Push: Ð¾Ð´Ð¸Ð½ Ð±Ð¸Ð½Ð°Ñ€Ð½Ð¸Ðº, Web Push â€” Ð½ÑƒÐ¶Ð½Ñ‹ ca-certificates Ð´Ð»Ñ HTTPS
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-ENV GOPROXY=direct GOSUMDB=off
+ENV GOPROXY=https://proxy.golang.org,direct GOSUMDB=off
 RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,id=go-mod \

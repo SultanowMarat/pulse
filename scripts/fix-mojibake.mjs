@@ -7,7 +7,7 @@ const exts = new Set([
   '.yml', '.yaml', '.conf', '.sh', '.env', '.ini', '.toml', '.sql', '.xml'
 ]);
 
-const re = /(?:[ÐÑÃÂ][\u0080-\u00FF])+/g;
+const re = /(?:[����][\u0080-\u00FF])+/g;
 
 function decodeIter(s) {
   let cur = s;
@@ -31,7 +31,7 @@ let replaced = 0;
 for (const file of files) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch { continue; }
-  if (!/[ÐÑÃÂ]/.test(txt)) continue;
+  if (!/[����]/.test(txt)) continue;
 
   let local = 0;
   const out = txt.replace(re, (m) => {

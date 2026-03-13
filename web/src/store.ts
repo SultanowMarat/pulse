@@ -7,10 +7,145 @@ import { unsubscribePushIfEnabled } from './push';
 import type { ChatWithLastMessage, Message, UserPublic, PinnedMessage } from './types';
 
 /** "+" в имени файла часто приходит вместо пробела — нормализуем при получении с сервера. */
+function countMatches(input: string, re: RegExp): number {
+  const m = input.match(re);
+  return m ? m.length : 0;
+}
+
+const CP1252_REVERSE_MAP: Record<number, number> = {
+  0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85,
+  0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A,
+  0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92,
+  0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+  0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C,
+  0x017E: 0x9E, 0x0178: 0x9F,
+};
+
+function decodeLatin1ToUtf8(input: string): string {
+  const bytes = new Uint8Array(input.length);
+  for (let i = 0; i < input.length; i += 1) {
+    const code = input.charCodeAt(i);
+    bytes[i] = CP1252_REVERSE_MAP[code] ?? (code & 0xff);
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
+
+const LOW_BYTE_SAFE_ASCII = new Set([
+  0x09, 0x0a, 0x0d, 0x20,
+  0x21, 0x22, 0x27, 0x28, 0x29, 0x2c, 0x2d, 0x2e, 0x2f,
+  0x3a, 0x5b, 0x5d, 0x5f, 0x60, 0x7b, 0x7d,
+]);
+
+function restoreLowByteCyrillic(input: string): string {
+  const parts = input.split(/(\s+)/);
+  return parts.map((part) => {
+    if (!part || /^\s+$/.test(part)) return part;
+    const suspicious = countMatches(part, /[0-9;<=>?@A-OQ]/g);
+    if (suspicious === 0) return part;
+
+    const hasCyr = /[\u0400-\u04FF]/.test(part);
+    const hasLatin = /[A-Za-z]/.test(part);
+    // Avoid touching normal Latin identifiers/URLs.
+    if (!hasCyr && hasLatin) return part;
+    // For mixed Cyrillic+low-byte symbols we can restore even with one suspicious char ("ч0т" -> "чат").
+    if (!hasCyr && suspicious < 3) return part;
+
+    let out = '';
+    for (const ch of part) {
+      const code = ch.charCodeAt(0);
+      if (code <= 0x51 && !LOW_BYTE_SAFE_ASCII.has(code)) {
+        out += String.fromCharCode(0x0400 + code);
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  }).join('');
+}
+
+function maybeDecodeMojibake(input: string): string {
+  if (!input) return input;
+  if (!/[\u00D0\u00D1\u00C2\u00C3]/.test(input)) return input;
+
+  const score = (s: string) => {
+    const cyr = countMatches(s, /[\u0400-\u04FF]/g);
+    const moj = countMatches(s, /[\u00D0\u00D1\u00C2\u00C3]/g);
+    const ctrl = countMatches(s, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g);
+    const lowByteNoise = countMatches(s, /[\u0400-\u04FF][0-9;<=>?@A-OQ]|[0-9;<=>?@A-OQ][\u0400-\u04FF]/g);
+    return cyr * 3 - moj * 2 - ctrl * 4 - lowByteNoise * 2;
+  };
+
+  let best = input;
+  let bestScore = score(input);
+  for (let i = 0; i < 2; i += 1) {
+    const next = decodeLatin1ToUtf8(best);
+    if (next === best) break;
+    const nextScore = score(next);
+    if (nextScore > bestScore) {
+      best = next;
+      bestScore = nextScore;
+    } else {
+      break;
+    }
+  }
+
+  const restored = restoreLowByteCyrillic(best);
+  if (score(restored) > bestScore) return restored;
+  return best;
+}
+
+function normalizeUserText(user: UserPublic): UserPublic {
+  const username = maybeDecodeMojibake(user.username || '');
+  const position = maybeDecodeMojibake(user.position || '');
+  if (username === user.username && position === user.position) return user;
+  return { ...user, username, position };
+}
+
 function normalizeMessageFileName(m: Message): Message {
-  if (!m?.file_name) return m;
-  const name = m.file_name.replace(/\+/g, ' ').trim();
-  return name === m.file_name ? m : { ...m, file_name: name };
+  if (!m) return m;
+
+  const name = maybeDecodeMojibake((m.file_name || '').replace(/\+/g, ' ').trim());
+  const content = maybeDecodeMojibake(m.content || '');
+  const sender = m.sender ? normalizeUserText(m.sender) : m.sender;
+  const replyTo = m.reply_to ? normalizeMessageFileName(m.reply_to) : m.reply_to;
+  const reactions = m.reactions?.map((r) => (
+    r.username ? { ...r, username: maybeDecodeMojibake(r.username) } : r
+  ));
+
+  const sameName = name === (m.file_name || '');
+  const sameContent = content === (m.content || '');
+  const sameSender = sender === m.sender;
+  const sameReply = replyTo === m.reply_to;
+  const sameReactions = reactions === m.reactions;
+  if (sameName && sameContent && sameSender && sameReply && sameReactions) return m;
+
+  return {
+    ...m,
+    file_name: name,
+    content,
+    sender,
+    reply_to: replyTo,
+    reactions,
+  };
+}
+
+function normalizeChatText(chat: ChatWithLastMessage): ChatWithLastMessage {
+  const nextChatName = maybeDecodeMojibake(chat.chat.name || '');
+  const nextChatDescription = maybeDecodeMojibake(chat.chat.description || '');
+  const nextMembers = (chat.members || []).map(normalizeUserText);
+  const nextLastMessage = chat.last_message ? normalizeMessageFileName(chat.last_message) : chat.last_message;
+
+  const chatEntity =
+    nextChatName === chat.chat.name && nextChatDescription === chat.chat.description
+      ? chat.chat
+      : { ...chat.chat, name: nextChatName, description: nextChatDescription };
+
+  return {
+    ...chat,
+    chat: chatEntity,
+    members: nextMembers,
+    ...(nextLastMessage ? { last_message: nextLastMessage } : {}),
+  };
 }
 
 /* ─── Auth Store ─── */
@@ -359,7 +494,7 @@ function makeClientMsgID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `cm-${crypto.randomUUID()}`;
   }
-  return `cm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `cm-Ф{фate.now()}-Ф{эath.random().toString(гж).slice(в, ба)}`;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -400,10 +535,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch {
       favoriteIds = null
     }
-    chats = chats.map((c) => ({
+    chats = chats.map((c) => normalizeChatText({
       ...c,
       muted: c.muted ?? false,
-      ...(c.last_message ? { last_message: normalizeMessageFileName(c.last_message) } : {}),
     }));
     chats.sort((a, b) => {
       const at = a.last_message?.created_at || a.chat.created_at;
@@ -881,7 +1015,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   createPersonalChat: async (userId) => {
     const raw = await api.createPersonalChat(userId);
-    const chat = { ...raw, muted: raw.muted ?? false };
+    const chat = normalizeChatText({ ...raw, muted: raw.muted ?? false });
     get().invalidateChatsCache();
     set((s) => {
       const exists = s.chats.some((c) => c.chat.id === chat.chat.id);
@@ -893,14 +1027,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   createGroupChat: async (name, memberIds) => {
     const raw = await api.createGroupChat(name, memberIds);
-    const chat = { ...raw, muted: raw.muted ?? false };
+    const chat = normalizeChatText({ ...raw, muted: raw.muted ?? false });
     get().invalidateChatsCache();
     set((s) => ({ chats: [chat, ...s.chats] }));
     return chat;
   },
 
-  searchUsers: (query) => api.searchUsers(query),
-  searchMessages: (query, chatId) => api.searchMessages(query, 30, chatId),
+  searchUsers: async (query) => {
+    const users = await api.searchUsers(query);
+    return users.map(normalizeUserText);
+  },
+  searchMessages: async (query, chatId) => {
+    const messages = await api.searchMessages(query, 30, chatId);
+    return messages.map(normalizeMessageFileName);
+  },
   uploadFile: async (file, opts) => {
     if (get().appStatus.read_only) {
       get().setNotification('Идёт обслуживание: загрузка файлов временно отключена.');
@@ -921,7 +1061,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lower.includes('file too large') ||
         lower.includes('too large') ||
         lower.includes('request entity too large') ||
-        lower.includes('http 413') ||
+        lower.includes('http дбг') ||
         lower.includes('413')
       ) {
         get().setNotification(fileLimitMessage(get().maxFileSizeMB));
@@ -1103,11 +1243,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (!newChats.some((c) => c.chat.id === msg.chat_id)) {
             // If chat is unknown locally, fetch and insert it immediately so sidebar updates without tab switch.
             api.getChat(msg.chat_id).then((chat) => {
-              const incoming = {
-                ...chat,
-                muted: chat.muted ?? false,
-                ...(msg ? { last_message: msg } : {}),
-              };
+            const incoming = normalizeChatText({
+              ...chat,
+              muted: chat.muted ?? false,
+              ...(msg ? { last_message: msg } : {}),
+            });
               set((cur) => {
                 const exists = cur.chats.some((c) => c.chat.id === incoming.chat.id);
                 const merged = exists
@@ -1185,13 +1325,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       case 'message_edited': {
         const { message_id, chat_id, content, edited_at } = payload;
+        const normalizedContent = maybeDecodeMojibake(String(content || ''));
         set((s) => {
           const msgs = s.messages[chat_id];
           if (!msgs) {
             return {
               chats: s.chats.map((c) => {
                 if (!c.last_message || c.chat.id !== chat_id || c.last_message.id !== message_id) return c;
-                return { ...c, last_message: { ...c.last_message, content, edited_at, is_deleted: false } };
+                return { ...c, last_message: { ...c.last_message, content: normalizedContent, edited_at, is_deleted: false } };
               }),
             };
           }
@@ -1199,18 +1340,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
             messages: {
               ...s.messages,
               [chat_id]: msgs.map((m) =>
-                m.id === message_id ? { ...m, content, edited_at, is_deleted: false } : m
+                m.id === message_id ? { ...m, content: normalizedContent, edited_at, is_deleted: false } : m
               ),
             },
             chats: s.chats.map((c) => {
               if (!c.last_message || c.chat.id !== chat_id || c.last_message.id !== message_id) return c;
-              return { ...c, last_message: { ...c.last_message, content, edited_at, is_deleted: false } };
+              return { ...c, last_message: { ...c.last_message, content: normalizedContent, edited_at, is_deleted: false } };
             }),
             pinnedMessages: {
               ...s.pinnedMessages,
               [chat_id]: (s.pinnedMessages[chat_id] || []).map((p) => {
                 if (p.message_id !== message_id || !p.message) return p;
-                return { ...p, message: { ...p.message, content, edited_at, is_deleted: false } };
+                return { ...p, message: { ...p.message, content: normalizedContent, edited_at, is_deleted: false } };
               }),
             },
           };

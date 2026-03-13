@@ -1,0 +1,96 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="$(var.WrapperAppName)"
+           Manufacturer="$(var.WrapperCompanyName)"
+           Version="$(var.WrapperVersion)"
+           UpgradeCode="2AB60A84-5FC3-4B7B-B4DB-30F3DE26EB73"
+           Language="1049"
+           Scope="perMachine">
+    <SummaryInformation Description="$(var.WrapperDescription)" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppProductIcon" SourceFile="$(var.WrapperAppIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="AppProductIcon" />
+
+    <SetProperty Id="InstallWebView2Runtime"
+                 Value="&quot;[#WebView2SetupExe]&quot; /silent /install"
+                 Before="InstallWebView2Runtime"
+                 Sequence="execute"
+                 Condition="NOT Installed" />
+    <CustomAction Id="InstallWebView2Runtime"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="InstallWebView2Runtime"
+              After="InstallFiles"
+              Condition="NOT Installed" />
+    </InstallExecuteSequence>
+
+    <Feature Id="MainFeature"
+             Title="$(var.WrapperAppName)"
+             Description="$(var.WrapperDescription)"
+             Level="1">
+      <ComponentRef Id="AppFilesComponent" />
+      <ComponentRef Id="WebView2BootstrapperComponent" />
+      <ComponentRef Id="DesktopShortcutComponent" />
+      <ComponentRef Id="StartMenuShortcutComponent" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="$(var.WrapperAppName)" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuAppFolder" Name="$(var.WrapperAppName)" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <Component Id="AppFilesComponent" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="PulseDesktopExecutable"
+            Source="$(var.PayloadDir)$(var.WrapperExeName)"
+            KeyPath="yes" />
+    </Component>
+
+    <Component Id="WebView2BootstrapperComponent" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="WebView2SetupExe"
+            Source="$(var.WebView2Bootstrapper)"
+            KeyPath="yes" />
+    </Component>
+
+    <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="*">
+      <Shortcut Id="DesktopShortcut"
+                Name="$(var.WrapperAppName)"
+                Description="$(var.WrapperDescription)"
+                Target="[INSTALLFOLDER]$(var.WrapperExeName)"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\$(var.WrapperCompanyName)\$(var.WrapperAppId)"
+                     Name="DesktopShortcut"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <Component Id="StartMenuShortcutComponent" Directory="ProgramMenuAppFolder" Guid="*">
+      <Shortcut Id="StartMenuShortcut"
+                Name="$(var.WrapperAppName)"
+                Description="$(var.WrapperDescription)"
+                Target="[INSTALLFOLDER]$(var.WrapperExeName)"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveProgramMenuAppFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\$(var.WrapperCompanyName)\$(var.WrapperAppId)"
+                     Name="StartMenuShortcut"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

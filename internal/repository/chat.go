@@ -90,7 +90,7 @@ func (r *ChatRepository) RemoveMember(ctx context.Context, chatID, userID string
 func (r *ChatRepository) GetMembers(ctx context.Context, chatID string) ([]model.User, error) {
 	defer logger.DeferLogDuration("chat.GetMembers", time.Now())()
 	rows, err := r.pool.Query(ctx,
-		`SELECT u.id, u.username, u.email, u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at
+		`SELECT u.id, u.username, COALESCE(u.email,''), u.password_hash, u.avatar_url, u.last_seen_at, u.is_online, u.created_at
 		 FROM users u
 		 JOIN chat_members cm ON cm.user_id = u.id
 		 WHERE cm.chat_id = $1
@@ -125,7 +125,7 @@ func (r *ChatRepository) GetMembersByChatIDs(ctx context.Context, chatIDs []stri
 
 	rows, err := r.pool.Query(ctx,
 		`SELECT cm.chat_id,
-		        u.id, u.username, u.email, COALESCE(u.phone,''), COALESCE(u.position,''),
+		        u.id, u.username, COALESCE(u.email,''), COALESCE(u.phone,''), COALESCE(u.position,''),
 		        u.avatar_url, u.is_online, u.last_seen_at, u.disabled_at
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
@@ -358,11 +358,11 @@ func (r *ChatRepository) FindNotesChat(ctx context.Context, userID string) (*mod
 	return c, nil
 }
 
-// Service/system chat key for "Ðž1Ñ‰89 Ñ‡0Ñ‚".
+// Service/system chat key for "Общий чат".
 const GeneralChatSystemKey = "general"
 
 // Default name for the general chat.
-const GeneralChatName = "Ðž1Ñ‰89 Ñ‡0Ñ‚"
+const GeneralChatName = "Общий чат"
 
 // GetBySystemKey returns a chat by system_key.
 func (r *ChatRepository) GetBySystemKey(ctx context.Context, systemKey string) (*model.Chat, error) {
@@ -388,6 +388,13 @@ func (r *ChatRepository) GetOrCreateGeneralChat(ctx context.Context, createdBy s
 	defer logger.DeferLogDuration("chat.GetOrCreateGeneralChat", time.Now())()
 	c, err := r.GetBySystemKey(ctx, GeneralChatSystemKey)
 	if err == nil {
+		// Self-heal renamed/corrupted system chat title.
+		if c.Name != GeneralChatName {
+			if err := r.UpdateChat(ctx, c.ID, GeneralChatName, c.Description, c.AvatarURL); err != nil {
+				return nil, err
+			}
+			c.Name = GeneralChatName
+		}
 		return c, nil
 	}
 	if !errors.Is(err, ErrNotFound) {
@@ -409,16 +416,24 @@ func (r *ChatRepository) GetOrCreateGeneralChat(ctx context.Context, createdBy s
 }
 
 // NotesChatName is the display name for the system notes chat.
-const NotesChatName = "Ð—0<5Ñ‚:8"
+const NotesChatName = "Заметки"
 
 // NotesChatDescription is the text shown in the notes chat.
-const NotesChatDescription = "-Ñ‚> Ñ‡0Ñ‚ 4;O ;8Ñ‡=Ñ‹Ñ… 70<5Ñ‚>:. Ð—45AÑŒ Ñƒ4>1=> Ñ…Ñ€0=8Ñ‚ÑŒ:\nâ€” ?;0=Ñ‹ =0 45=ÑŒ;\nâ€” A?8A>: ?>:Ñƒ?>:;\nâ€” ?>;57=Ñ‹5 AAÑ‹;:8;\nâ€” <Ñ‹A;8 8 8458.\n\n-Ñ‚> 20Ñˆ ;8Ñ‡=Ñ‹9 Ñ‡0Ñ‚, 2 =53> =5;ÑŒ7O 4>102;OÑ‚ÑŒ 4Ñ€Ñƒ38Ñ… ;ÑŽ459. > ?Ñ€8 65;0=88 2Ñ‹ <>65Ñ‚5 ?5Ñ€5AÑ‹;0Ñ‚ÑŒ A>>1Ñ‰5=8O 87 70<5Ñ‚>: 2 4Ñ€Ñƒ385 Ñ‡0Ñ‚Ñ‹."
+const NotesChatDescription = "Это чат для личных заметок. Здесь удобно хранить:\n— планы на день;\n— список покупок;\n— полезные ссылки;\n— мысли и идеи.\n\nЭто ваш личный чат, в него нельзя добавлять других людей. Но при желании вы можете пересылать сообщения из заметок в другие чаты."
 
 // GetOrCreateNotesChat returns the user's notes chat, creating it if it does not exist.
 func (r *ChatRepository) GetOrCreateNotesChat(ctx context.Context, userID string) (*model.Chat, error) {
 	defer logger.DeferLogDuration("chat.GetOrCreateNotesChat", time.Now())()
 	c, err := r.FindNotesChat(ctx, userID)
 	if err == nil {
+		// Self-heal notes system text if it was previously saved with broken encoding.
+		if c.Name != NotesChatName || c.Description != NotesChatDescription {
+			if err := r.UpdateChat(ctx, c.ID, NotesChatName, NotesChatDescription, c.AvatarURL); err != nil {
+				return nil, err
+			}
+			c.Name = NotesChatName
+			c.Description = NotesChatDescription
+		}
 		return c, nil
 	}
 	if !errors.Is(err, ErrNotFound) {

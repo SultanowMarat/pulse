@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,19 +17,21 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/pulse/internal/authkey"
+	"github.com/pulse/internal/cache"
 	"github.com/pulse/internal/logger"
 	"github.com/pulse/internal/middleware"
 	"github.com/pulse/internal/model"
 	"github.com/pulse/internal/repository"
 )
 
-// phoneRe â€” <564Ñƒ=0Ñ€>4=Ñ‹9 Ñ„>Ñ€<0Ñ‚: + 8 8â€“15 Ñ†8Ñ„Ñ€ (E.164).
+// phoneRe ��‚¬â€ <564Ã‘Æ’=0Ã‘â‚¬>4=Ã‘â€¹9 Ã‘â€ž>Ã‘â‚¬<0Ã‘â€š: + 8 8��‚¬â€œ15 Ã‘â€ 8Ã‘â€žÃ‘â‚¬ (E.164).
 var phoneRe = regexp.MustCompile(`^\+\d{8,15}$`)
 
 type UserHandler struct {
 	userRepo *repository.UserRepository
 	msgRepo  *repository.MessageRepository
 	permRepo *repository.PermissionRepository
+	cache    *cache.UserCache
 	authURL  string
 	httpC    *http.Client
 	kicker   UserKicker
@@ -38,31 +41,80 @@ type UserKicker interface {
 	KickUser(userID string)
 }
 
-func NewUserHandler(userRepo *repository.UserRepository, msgRepo *repository.MessageRepository, permRepo *repository.PermissionRepository, authServiceURL string, httpClient *http.Client, kicker UserKicker) *UserHandler {
+func NewUserHandler(userRepo *repository.UserRepository, msgRepo *repository.MessageRepository, permRepo *repository.PermissionRepository, cache *cache.UserCache, authServiceURL string, httpClient *http.Client, kicker UserKicker) *UserHandler {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 5 * time.Second}
 	}
-	return &UserHandler{userRepo: userRepo, msgRepo: msgRepo, permRepo: permRepo, authURL: strings.TrimRight(authServiceURL, "/"), httpC: httpClient, kicker: kicker}
+	return &UserHandler{userRepo: userRepo, msgRepo: msgRepo, permRepo: permRepo, cache: cache, authURL: strings.TrimRight(authServiceURL, "/"), httpC: httpClient, kicker: kicker}
+}
+
+func (h *UserHandler) invalidateUserCaches(ctx context.Context, userIDs ...string) {
+	if h.cache == nil {
+		return
+	}
+	if err := h.cache.InvalidateListCaches(ctx); err != nil {
+		logger.Errorf("User cache invalidate list caches: %v", err)
+	}
+	if len(userIDs) > 0 {
+		if err := h.cache.InvalidateProfiles(ctx, userIDs...); err != nil {
+			logger.Errorf("User cache invalidate profiles: %v", err)
+		}
+		if err := h.cache.InvalidatePermissions(ctx, userIDs...); err != nil {
+			logger.Errorf("User cache invalidate permissions: %v", err)
+		}
+	}
 }
 
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
+	if h.cache != nil {
+		var cached model.UserPublic
+		hit, err := h.cache.Profile(r.Context(), userID, &cached)
+		if err != nil {
+			logger.Errorf("GetProfile cache read user=%s: %v", userID, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
 	user, err := h.userRepo.GetByID(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	writeJSONCached(w, r, http.StatusOK, user.ToPublic(), user.CreatedAt)
+	pub := user.ToPublic()
+	if h.cache != nil {
+		if err := h.cache.SetProfile(r.Context(), userID, pub); err != nil {
+			logger.Errorf("GetProfile cache write user=%s: %v", userID, err)
+		}
+	}
+	writeJSONCached(w, r, http.StatusOK, pub, user.CreatedAt)
 }
 
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if h.cache != nil {
+		var cached model.UserPublic
+		hit, err := h.cache.Profile(r.Context(), id, &cached)
+		if err != nil {
+			logger.Errorf("GetUser cache read user=%s: %v", id, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
 	user, err := h.userRepo.GetByID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, user.ToPublic())
+	pub := user.ToPublic()
+	if h.cache != nil {
+		if err := h.cache.SetProfile(r.Context(), id, pub); err != nil {
+			logger.Errorf("GetUser cache write user=%s: %v", id, err)
+		}
+	}
+	writeJSON(w, http.StatusOK, pub)
 }
 
 // UserStatsResponse combines user profile with activity stats.
@@ -94,28 +146,53 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	currentUserID := middleware.GetUserID(r.Context())
+	if h.cache != nil {
+		var cached []model.UserPublic
+		hit, err := h.cache.UsersList(r.Context(), currentUserID, 500, &cached)
+		if err != nil {
+			logger.Errorf("GetUsers cache read user=%s: %v", currentUserID, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
 	users, err := h.userRepo.ListAll(r.Context(), 500)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list users failed")
 		return
 	}
-	currentUserID := middleware.GetUserID(r.Context())
 	result := make([]model.UserPublic, 0, len(users))
 	for _, u := range users {
 		if u.ID != currentUserID {
 			result = append(result, u.ToPublic())
 		}
 	}
+	if h.cache != nil {
+		if err := h.cache.SetUsersList(r.Context(), currentUserID, 500, result); err != nil {
+			logger.Errorf("GetUsers cache write user=%s: %v", currentUserID, err)
+		}
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GetEmployees 2>72Ñ€0Ñ‰05Ñ‚ 2A5Ñ… ?>;ÑŒ7>20Ñ‚5;59 (A?8A>: A>Ñ‚Ñ€Ñƒ4=8:>2). ">;ÑŒ:> 4;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0.
+// GetEmployees 2>72Ã‘â‚¬0Ã‘â€°05Ã‘â€š 2A5Ã‘â€¦ ?>;Ã‘Å’7>20Ã‘â€š5;59 (A?8A>: A>Ã‘â€šÃ‘â‚¬Ã‘Æ’4=8:>2). ">;Ã‘Å’:> 4;O 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬0.
 func (h *UserHandler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	currentUserID := middleware.GetUserID(r.Context())
 	perm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
 	if err != nil || !perm.Administrator {
 		writeError(w, http.StatusForbidden, "only administrator can list employees")
 		return
+	}
+	if h.cache != nil {
+		var cached []model.UserPublic
+		hit, err := h.cache.EmployeesList(r.Context(), 2000, &cached)
+		if err != nil {
+			logger.Errorf("GetEmployees cache read admin=%s: %v", currentUserID, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
 	}
 	users, err := h.userRepo.ListAll(r.Context(), 2000)
 	if err != nil {
@@ -125,6 +202,11 @@ func (h *UserHandler) GetEmployees(w http.ResponseWriter, r *http.Request) {
 	result := make([]model.UserPublic, 0, len(users))
 	for _, u := range users {
 		result = append(result, u.ToPublic())
+	}
+	if h.cache != nil {
+		if err := h.cache.SetEmployeesList(r.Context(), 2000, result); err != nil {
+			logger.Errorf("GetEmployees cache write admin=%s: %v", currentUserID, err)
+		}
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -148,7 +230,7 @@ func roleFromPermissions(p model.UserPermissions) string {
 	return "member"
 }
 
-// GetEmployeesPage 2>72Ñ€0Ñ‰05Ñ‚ ?>;ÑŒ7>20Ñ‚5;59 ?>AÑ‚Ñ€0=8Ñ‡=>. ">;ÑŒ:> 4;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€0.
+// GetEmployeesPage 2>72Ã‘â‚¬0Ã‘â€°05Ã‘â€š ?>;Ã‘Å’7>20Ã‘â€š5;59 ?>AÃ‘â€šÃ‘â‚¬0=8Ã‘â€¡=>. ">;Ã‘Å’:> 4;O 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬0.
 // Query params:
 // - q: search by username/email/phone
 // - limit, offset
@@ -187,6 +269,16 @@ func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 
 	sortKey := strings.TrimSpace(r.URL.Query().Get("sort_key"))
 	sortDir := strings.TrimSpace(r.URL.Query().Get("sort_dir"))
+	if h.cache != nil {
+		var cached EmployeesPageResponse
+		hit, err := h.cache.EmployeesPage(r.Context(), q, limit, offset, sortKey, sortDir, &cached)
+		if err != nil {
+			logger.Errorf("GetEmployeesPage cache read admin=%s: %v", currentUserID, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
 
 	res, err := h.userRepo.ListPage(r.Context(), q, limit, offset, sortKey, sortDir)
 	if err != nil {
@@ -216,15 +308,21 @@ func (h *UserHandler) GetEmployeesPage(w http.ResponseWriter, r *http.Request) {
 			Role:       role,
 		})
 	}
-	writeJSON(w, http.StatusOK, EmployeesPageResponse{
+	resp := EmployeesPageResponse{
 		Users:  out,
 		Total:  res.Total,
 		Limit:  limit,
 		Offset: offset,
-	})
+	}
+	if h.cache != nil {
+		if err := h.cache.SetEmployeesPage(r.Context(), q, limit, offset, sortKey, sortDir, resp); err != nil {
+			logger.Errorf("GetEmployeesPage cache write admin=%s: %v", currentUserID, err)
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
-// CreateUserRequest â€” A>740=85 ?>;ÑŒ7>20Ñ‚5;O 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€>< (A>Ñ‚Ñ€Ñƒ4=8: 157 2Ñ…>40; ?Ñ€8 ?5Ñ€2>< 2Ñ…>45 ?> email AÑ‚0=5Ñ‚ 53> ?Ñ€>Ñ„8;ÑŒ).
+// CreateUserRequest ��‚¬â€ A>740=85 ?>;Ã‘Å’7>20Ã‘â€š5;O 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬>< (A>Ã‘â€šÃ‘â‚¬Ã‘Æ’4=8: 157 2Ã‘â€¦>40; ?Ã‘â‚¬8 ?5Ã‘â‚¬2>< 2Ã‘â€¦>45 ?> email AÃ‘â€š0=5Ã‘â€š 53> ?Ã‘â‚¬>Ã‘â€ž8;Ã‘Å’).
 type CreateUserRequest struct {
 	Email       string `json:"email"`
 	Username    string `json:"username"`
@@ -237,7 +335,7 @@ type CreateUserRequest struct {
 	} `json:"permissions"`
 }
 
-// CreateUser A>740Ñ‘Ñ‚ ?>;ÑŒ7>20Ñ‚5;O (04<8=). Email 8 8<O >1O70Ñ‚5;ÑŒ=Ñ‹. ÐŸÑ€8 ?5Ñ€2>< 2Ñ…>45 ?> MÑ‚>9 ?>Ñ‡Ñ‚5 ?>;ÑŒ7>20Ñ‚5;ÑŒ ?>;ÑƒÑ‡8Ñ‚ MÑ‚>Ñ‚ ?Ñ€>Ñ„8;ÑŒ.
+// CreateUser A>740Ã‘â€˜Ã‘â€š ?>;Ã‘Å’7>20Ã‘â€š5;O (04<8=). Email 8 8<O >1O70Ã‘â€š5;Ã‘Å’=Ã‘â€¹. ���Ã‘â‚¬8 ?5Ã‘â‚¬2>< 2Ã‘â€¦>45 ?> MÃ‘â€š>9 ?>Ã‘â€¡Ã‘â€š5 ?>;Ã‘Å’7>20Ã‘â€š5;Ã‘Å’ ?>;Ã‘Æ’Ã‘â€¡8Ã‘â€š MÃ‘â€š>Ã‘â€š ?Ã‘â‚¬>Ã‘â€ž8;Ã‘Å’.
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	currentUserID := middleware.GetUserID(r.Context())
 	perm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
@@ -252,32 +350,36 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	emailNorm := strings.TrimSpace(strings.ToLower(req.Email))
 	username := strings.TrimSpace(req.Username)
-	if emailNorm == "" || username == "" {
-		writeError(w, http.StatusBadRequest, "email and username required")
+	if username == "" {
+		writeError(w, http.StatusBadRequest, "username required")
 		return
 	}
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid email format")
-		return
+	if emailNorm != "" {
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid email format")
+			return
+		}
 	}
 	phone := strings.TrimSpace(req.Phone)
 	if phone != "" && !phoneRe.MatchString(phone) {
-		writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
+		writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8-15 digits)")
 		return
 	}
-	if exists, err := h.userRepo.ExistsByEmail(r.Context(), emailNorm, ""); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to check email")
-		return
-	} else if exists {
-		writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
-		return
+	if emailNorm != "" {
+		if exists, err := h.userRepo.ExistsByEmail(r.Context(), emailNorm, ""); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to check email")
+			return
+		} else if exists {
+			writeError(w, http.StatusConflict, "email already exists")
+			return
+		}
 	}
 	if phone != "" {
 		if exists, err := h.userRepo.ExistsByPhone(r.Context(), phone, ""); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
+			writeError(w, http.StatusConflict, "phone already exists")
 			return
 		}
 	}
@@ -310,6 +412,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to set permissions")
 		return
 	}
+	h.invalidateUserCaches(r.Context(), u.ID)
 	writeJSON(w, http.StatusCreated, u.ToPublic())
 }
 
@@ -320,17 +423,33 @@ func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID := middleware.GetUserID(r.Context())
+	if h.cache != nil {
+		var cached []model.UserPublic
+		hit, err := h.cache.UsersSearch(r.Context(), currentUserID, query, 20, &cached)
+		if err != nil {
+			logger.Errorf("SearchUsers cache read user=%s: %v", currentUserID, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
+
 	users, err := h.userRepo.SearchByUsername(r.Context(), query, 20)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search failed")
 		return
 	}
 
-	currentUserID := middleware.GetUserID(r.Context())
 	result := make([]model.UserPublic, 0, len(users))
 	for _, u := range users {
 		if u.ID != currentUserID {
 			result = append(result, u.ToPublic())
+		}
+	}
+	if h.cache != nil {
+		if err := h.cache.SetUsersSearch(r.Context(), currentUserID, query, 20, result); err != nil {
+			logger.Errorf("SearchUsers cache write user=%s: %v", currentUserID, err)
 		}
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -351,7 +470,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ð’0;840Ñ†8O email (5A;8 ?5Ñ€540=)
+	// ��€™0;840Ã‘â€ 8O email (5A;8 ?5Ã‘â‚¬540=)
 	reqEmail := strings.TrimSpace(req.Email)
 	if reqEmail != "" {
 		if _, err := mail.ParseAddress(reqEmail); err != nil {
@@ -360,11 +479,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Ð’0;840Ñ†8O Ñ‚5;5Ñ„>=0 (5A;8 ?5Ñ€540=): AÑ‚Ñ€>3> +993XXXXXXXX
+	// ��€™0;840Ã‘â€ 8O Ã‘â€š5;5Ã‘â€ž>=0 (5A;8 ?5Ã‘â‚¬540=): AÃ‘â€šÃ‘â‚¬>3> +993XXXXXXXX
 	reqPhone := strings.TrimSpace(req.Phone)
 	if reqPhone != "" {
 		if !phoneRe.MatchString(reqPhone) {
-			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
+			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8-15 digits)")
 			return
 		}
 	}
@@ -403,7 +522,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to check email")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
+			writeError(w, http.StatusConflict, "email already exists")
 			return
 		}
 	}
@@ -412,7 +531,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
+			writeError(w, http.StatusConflict, "phone already exists")
 			return
 		}
 	}
@@ -427,10 +546,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user.Email = email
 	user.Phone = phone
 	user.Position = position
+	h.invalidateUserCaches(r.Context(), userID)
 	writeJSON(w, http.StatusOK, user.ToPublic())
 }
 
-// UpdateUserProfile >1=>2;O5Ñ‚ ?Ñ€>Ñ„8;ÑŒ ?>;ÑŒ7>20Ñ‚5;O ?> id. !2>Ñ‘ â€” 2A5340, Ñ‡Ñƒ6>5 â€” Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€.
+// UpdateUserProfile >1=>2;O5Ã‘â€š ?Ã‘â‚¬>Ã‘â€ž8;Ã‘Å’ ?>;Ã‘Å’7>20Ã‘â€š5;O ?> id. !2>Ã‘â€˜ ��‚¬â€ 2A5340, Ã‘â€¡Ã‘Æ’6>5 ��‚¬â€ Ã‘â€š>;Ã‘Å’:> 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬.
 func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	currentUserID := middleware.GetUserID(r.Context())
@@ -460,7 +580,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	reqPhone := strings.TrimSpace(req.Phone)
 	if reqPhone != "" {
 		if !phoneRe.MatchString(reqPhone) {
-			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8â€“15 digits)")
+			writeError(w, http.StatusBadRequest, "invalid phone: use international format (+ and 8-15 digits)")
 			return
 		}
 	}
@@ -500,7 +620,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusInternalServerError, "failed to check email")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 email Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
+			writeError(w, http.StatusConflict, "email already exists")
 			return
 		}
 	}
@@ -509,7 +629,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusInternalServerError, "failed to check phone")
 			return
 		} else if exists {
-			writeError(w, http.StatusConflict, "Ð”0==Ñ‹9 =><5Ñ€ Ñ‚5;5Ñ„>=0 Ñƒ65 8A?>;ÑŒ7Ñƒ5Ñ‚AO")
+			writeError(w, http.StatusConflict, "phone already exists")
 			return
 		}
 	}
@@ -523,6 +643,7 @@ func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) 
 	user.Email = email
 	user.Phone = phone
 	user.Position = position
+	h.invalidateUserCaches(r.Context(), id)
 	writeJSON(w, http.StatusOK, user.ToPublic())
 }
 
@@ -572,6 +693,16 @@ func (h *UserHandler) GetUserPermissions(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "user id required")
 		return
 	}
+	if h.cache != nil {
+		var cached model.UserPermissions
+		hit, err := h.cache.Permission(r.Context(), id, &cached)
+		if err != nil {
+			logger.Errorf("GetUserPermissions cache read user=%s: %v", id, err)
+		} else if hit {
+			writeJSON(w, http.StatusOK, &cached)
+			return
+		}
+	}
 	if _, err := h.userRepo.GetByID(r.Context(), id); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")
@@ -590,6 +721,11 @@ func (h *UserHandler) GetUserPermissions(w http.ResponseWriter, r *http.Request)
 			Member:        true,
 		})
 		return
+	}
+	if h.cache != nil {
+		if err := h.cache.SetPermission(r.Context(), id, perm); err != nil {
+			logger.Errorf("GetUserPermissions cache write user=%s: %v", id, err)
+		}
 	}
 	writeJSON(w, http.StatusOK, perm)
 }
@@ -614,7 +750,7 @@ func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to get user")
 		return
 	}
-	// Ðœ5=OÑ‚ÑŒ ?Ñ€020 4Ñ€Ñƒ3>3> ?>;ÑŒ7>20Ñ‚5;O <>65Ñ‚ Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€
+	// ��“5=OÃ‘â€šÃ‘Å’ ?Ã‘â‚¬020 4Ã‘â‚¬Ã‘Æ’3>3> ?>;Ã‘Å’7>20Ã‘â€š5;O <>65Ã‘â€š Ã‘â€š>;Ã‘Å’:> 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬
 	if id != currentUserID {
 		myPerm, err := h.permRepo.GetByUserID(r.Context(), currentUserID)
 		if err != nil || !myPerm.Administrator {
@@ -642,6 +778,7 @@ func (h *UserHandler) UpdateUserPermissions(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to save permissions")
 		return
 	}
+	h.invalidateUserCaches(r.Context(), id)
 	writeJSON(w, http.StatusOK, perm)
 }
 
@@ -687,12 +824,12 @@ func (h *UserHandler) GenerateUserLoginKey(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// SetUserDisabledRequest Ñ‚5;> 70?Ñ€>A0 2:;ÑŽÑ‡8Ñ‚ÑŒ/>Ñ‚:;ÑŽÑ‡8Ñ‚ÑŒ ?>;ÑŒ7>20Ñ‚5;O.
+// SetUserDisabledRequest Ã‘â€š5;> 70?Ã‘â‚¬>A0 2:;Ã‘Å½Ã‘â€¡8Ã‘â€šÃ‘Å’/>Ã‘â€š:;Ã‘Å½Ã‘â€¡8Ã‘â€šÃ‘Å’ ?>;Ã‘Å’7>20Ã‘â€š5;O.
 type SetUserDisabledRequest struct {
 	Disabled bool `json:"disabled"`
 }
 
-// SetUserDisabled >Ñ‚:;ÑŽÑ‡05Ñ‚ 8;8 2:;ÑŽÑ‡05Ñ‚ ?>;ÑŒ7>20Ñ‚5;O (Ñ‚>;ÑŒ:> 04<8=8AÑ‚Ñ€0Ñ‚>Ñ€). ÐžÑ‚:;ÑŽÑ‡Ñ‘==Ñ‹9 =5 <>65Ñ‚ 2>9Ñ‚8.
+// SetUserDisabled >Ã‘â€š:;Ã‘Å½Ã‘â€¡05Ã‘â€š 8;8 2:;Ã‘Å½Ã‘â€¡05Ã‘â€š ?>;Ã‘Å’7>20Ã‘â€š5;O (Ã‘â€š>;Ã‘Å’:> 04<8=8AÃ‘â€šÃ‘â‚¬0Ã‘â€š>Ã‘â‚¬). ���Ã‘â€š:;Ã‘Å½Ã‘â€¡Ã‘â€˜==Ã‘â€¹9 =5 <>65Ã‘â€š 2>9Ã‘â€š8.
 func (h *UserHandler) SetUserDisabled(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	currentUserID := middleware.GetUserID(r.Context())
@@ -701,8 +838,14 @@ func (h *UserHandler) SetUserDisabled(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "only administrator can disable or enable users")
 		return
 	}
-	if id == currentUserID {
-		writeError(w, http.StatusBadRequest, "=5;ÑŒ7O >Ñ‚:;ÑŽÑ‡8Ñ‚ÑŒ A0<>3> A51O")
+	var req SetUserDisabledRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	// Allow saving own profile when disabled=false; forbid only self-disable.
+	if req.Disabled && id == currentUserID {
+		writeError(w, http.StatusBadRequest, "cannot disable yourself")
 		return
 	}
 	_, err = h.userRepo.GetByID(r.Context(), id)
@@ -714,15 +857,11 @@ func (h *UserHandler) SetUserDisabled(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get user")
 		return
 	}
-	var req SetUserDisabledRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
 	if err := h.userRepo.SetDisabled(r.Context(), id, req.Disabled); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update user")
 		return
 	}
+	h.invalidateUserCaches(r.Context(), id)
 	writeJSON(w, http.StatusOK, map[string]bool{"disabled": req.Disabled})
 }
 

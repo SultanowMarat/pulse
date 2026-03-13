@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useAuthStore } from '../store';
 
-type Step = 'email' | 'code';
+type Step = 'identifier' | 'code';
 
 export default function Auth() {
-  const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<Step>('identifier');
+  const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,27 +17,27 @@ export default function Auth() {
     setError('');
     setLoading(true);
     try {
-      const autoLoggedIn = await requestCode(email);
+      const autoLoggedIn = await requestCode(identifier);
       if (!autoLoggedIn) setStep('code');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Произошла ошибка');
     } finally {
       setLoading(false);
     }
-  }, [email, requestCode]);
+  }, [identifier, requestCode]);
 
   const handleVerifyCode = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await verifyCode(email, code);
+      await verifyCode(identifier, code);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Неверный или истёкший код');
+      setError(err instanceof Error ? err.message : 'Неверный или истекший код');
     } finally {
       setLoading(false);
     }
-  }, [email, code, verifyCode]);
+  }, [identifier, code, verifyCode]);
 
   return (
     <div className="min-h-screen min-h-[var(--app-height)] min-w-0 max-w-[100vw] w-full flex items-center justify-center bg-surface dark:bg-dark-bg p-3 sm:p-4 safe-area-padding overflow-x-clip">
@@ -46,7 +46,7 @@ export default function Auth() {
           <div className="flex items-center justify-center mb-4">
             {logoFailed ? (
               <div className="w-20 h-20 rounded-[20px] bg-primary text-white flex items-center justify-center text-[26px] font-bold shadow-lg shadow-black/20">
-                BH
+                P
               </div>
             ) : (
               <img
@@ -67,21 +67,23 @@ export default function Auth() {
               <div className="bg-danger/8 text-danger text-[13px] rounded-compass px-3.5 py-2.5 font-medium">{error}</div>
             )}
 
-            {step === 'email' ? (
+            {step === 'identifier' ? (
               <form onSubmit={handleRequestCode} className="space-y-4">
                 <div>
-                  <label className="block text-[13px] font-medium text-txt-secondary dark:text-[#8b98a5] mb-1.5">Email</label>
+                  <label className="block text-[13px] font-medium text-txt-secondary dark:text-[#8b98a5] mb-1.5">
+                    Email или ключ входа
+                  </label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     className="compass-input"
-                    placeholder="name@company.com"
-                    autoComplete="email"
+                    placeholder="name@company.com или ключ входа"
+                    autoComplete="username"
                     required
                   />
                   <p className="mt-1.5 text-[12px] leading-5 text-txt-secondary dark:text-[#8b98a5]">
-                    На этот адрес придет одноразовый код для входа. Если письмо не пришло, проверьте «Спам».
+                    На email придет одноразовый код для входа. Если введен ключ входа, вход выполнится сразу.
                   </p>
                 </div>
                 <button type="submit" disabled={loading} className="compass-btn-primary w-full py-3 mt-1">
@@ -98,7 +100,7 @@ export default function Auth() {
             ) : (
               <form onSubmit={handleVerifyCode} className="space-y-4">
                 <p className="text-[13px] text-txt-secondary dark:text-[#8b98a5]">
-                  Код отправлен на <strong className="text-txt dark:text-[#e7e9ea]">{email}</strong>
+                  Код отправлен на <strong className="text-txt dark:text-[#e7e9ea]">{identifier}</strong>
                 </p>
                 <div>
                   <label className="block text-[13px] font-medium text-txt-secondary dark:text-[#8b98a5] mb-1.5">Код из письма</label>
@@ -126,10 +128,10 @@ export default function Auth() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setStep('email'); setCode(''); setError(''); }}
+                  onClick={() => { setStep('identifier'); setCode(''); setError(''); }}
                   className="w-full text-[13px] text-primary hover:underline"
                 >
-                  Указать другой email
+                  Указать другой email/ключ
                 </button>
               </form>
             )}

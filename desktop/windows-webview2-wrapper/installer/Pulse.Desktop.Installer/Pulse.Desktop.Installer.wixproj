@@ -1,0 +1,27 @@
+<Project Sdk="WixToolset.Sdk/4.0.5">
+  <Import Project="..\..\build\ProductSettings.props" />
+
+  <PropertyGroup>
+    <Platform>x64</Platform>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <PublishDir>$(MSBuildThisFileDirectory)..\..\src\Pulse.Desktop\bin\$(Configuration)\net8.0-windows\win-x64\publish\</PublishDir>
+    <PayloadDir>$(MSBuildThisFileDirectory)payload\</PayloadDir>
+    <DefineConstants>WrapperAppName=$(WrapperAppName);WrapperAppId=$(WrapperAppId);WrapperCompanyName=$(WrapperCompanyName);WrapperDescription=$(WrapperDescription);WrapperVersion=$(WrapperVersion);WrapperExeName=$(WrapperAppId).exe;PayloadDir=$(PayloadDir);WebView2Bootstrapper=$(MSBuildThisFileDirectory)..\redist\MicrosoftEdgeWebView2Setup.exe;WrapperAppIcon=$(WrapperAppIconPath)</DefineConstants>
+    <OutputName>$(WrapperAppId)-$(WrapperVersion)</OutputName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.5" />
+  </ItemGroup>
+
+  <Target Name="PublishDesktopProject" BeforeTargets="BeforeBuild">
+    <RemoveDir Directories="$(PayloadDir)" />
+    <MakeDir Directories="$(PayloadDir)" />
+    <MSBuild
+      Projects="..\..\src\Pulse.Desktop\Pulse.Desktop.csproj"
+      Targets="Publish"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishDir=$(PublishDir);PublishSingleFile=true;SelfContained=false" />
+    <Copy SourceFiles="$(PublishDir)$(WrapperAppId).exe"
+          DestinationFolder="$(PayloadDir)" />
+  </Target>
+</Project>

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\build\ProductSettings.props" />
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <AssemblyName>$(WrapperAppId)</AssemblyName>
+    <Product>$(WrapperAppName)</Product>
+    <Company>$(WrapperCompanyName)</Company>
+    <Description>$(WrapperDescription)</Description>
+    <Version>$(WrapperVersion)</Version>
+    <FileVersion>$(WrapperVersion)</FileVersion>
+    <AssemblyVersion>$(WrapperVersion).0</AssemblyVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3485.44" />
+    <Compile Include="$(IntermediateOutputPath)WrapperSettings.g.cs" />
+    <None Include="Resources\app.ico" />
+  </ItemGroup>
+
+  <Target Name="GenerateWrapperSettings" BeforeTargets="BeforeCompile">
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)WrapperSettings.g.cs"
+      Overwrite="true"
+      Lines="namespace Pulse.Desktop%3B&#xD;&#xA;internal static class WrapperSettings&#xD;&#xA;{&#xD;&#xA;    public const string AppName = &quot;$(WrapperAppName)&quot;%3B&#xD;&#xA;    public const string AppVersion = &quot;$(WrapperVersion)&quot;%3B&#xD;&#xA;    public const string AppDescription = &quot;$(WrapperDescription)&quot;%3B&#xD;&#xA;    public const string StartUrl = &quot;$(WrapperStartUrl)&quot;%3B&#xD;&#xA;    public const string CompanyName = &quot;$(WrapperCompanyName)&quot;%3B&#xD;&#xA;}" />
+  </Target>
+
+  <Target Name="PrepareAppIcon" BeforeTargets="BeforeBuild" Condition="Exists('$(WrapperAppIconPath)')">
+    <Copy SourceFiles="$(WrapperAppIconPath)"
+          DestinationFiles="$(ProjectDir)Resources\app.ico"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

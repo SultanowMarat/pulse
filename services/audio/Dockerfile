@@ -1,6 +1,6 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-ENV GOPROXY=direct GOSUMDB=off
+ENV GOPROXY=https://proxy.golang.org,direct GOSUMDB=off
 RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,id=go-mod \

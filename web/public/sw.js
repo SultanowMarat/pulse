@@ -8,6 +8,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+const ICON_VERSION = '20260312-2';
+
 function buildAbsoluteUrl(path) {
   try {
     return new URL(path || '/', self.location.origin).toString();
@@ -37,8 +39,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body,
-    icon: '/icons/icon-192.png?v=20260311-6',
-    badge: '/icons/icon-192.png?v=20260311-6',
+    icon: `/icons/icon-192.png?v=${ICON_VERSION}`,
+    badge: `/icons/icon-192.png?v=${ICON_VERSION}`,
     tag,
     renotify: true,
     requireInteraction: true,
@@ -78,4 +80,6 @@ self.addEventListener('pushsubscriptionchange', (event) => {
     })
   );
 });
+
+
 
